@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+
+{% block title %}{% if deal %}Edit Deal{% else %}New Deal{% endif %} — MOSES CRM{% endblock %}
+{% block page_title %}{% if deal %}Edit Deal{% else %}New Deal{% endif %}{% endblock %}
+{% block page_subtitle %}<p class="text-xs text-gray-500 mt-0.5">{% if deal %}Editing: {{ deal.name }}{% else %}Register a new deal in the pipeline{% endif %}</p>{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('dashboard') }}" class="btn-secondary text-xs">
+  <i class="fa-solid fa-arrow-left"></i> Back
+</a>
+{% endblock %}
+
+{% block content %}
+<form method="POST"
+      action="{% if deal %}{{ url_for('deal_edit', deal_id=deal.id) }}{% else %}{{ url_for('deal_new') }}{% endif %}"
+      id="deal-form">
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    {# ── Left: Basic info ─────────────────────────────────────────────────── #}
+    <div class="lg:col-span-1 space-y-5">
+
+      <div class="card p-5">
+        <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-file-signature text-blue-500"></i> General Information
+        </h3>
+
+        <div class="mb-4">
+          <label for="name" class="form-label">Deal Name <span class="text-red-500">*</span></label>
+          <input type="text" id="name" name="name" required
+                 value="{{ deal.name if deal else '' }}"
+                 placeholder="e.g. Residential North Project #48"
+                 class="form-input">
+        </div>
+
+        <div class="mb-4">
+          <label for="installer_id" class="form-label">Dealer <span class="text-red-500">*</span></label>
+          <select id="installer_id" name="installer_id" required class="form-input">
+            <option value="">— Select dealer —</option>
+            {% for inst in dealers %}
+            <option value="{{ inst.id }}"
+              {% if deal and deal.installer_id == inst.id %}selected{% endif %}>
+              {{ inst.name }}
+            </option>
+            {% endfor %}
+          </select>
+          {% if not dealers %}
+          <p class="text-xs text-amber-600 mt-1">
+            <i class="fa-solid fa-triangle-exclamation"></i> No dealers registered.
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('dealer_new') }}" class="underline">Create one.</a>
+            {% endif %}
+          </p>
+          {% endif %}
+        </div>
+
+        <div>
+          <label for="status_id" class="form-label">Initial Status</label>
+          <select id="status_id" name="status_id" class="form-input">
+            {% for s in statuses %}
+            <option value="{{ s.id }}"
+              {% if deal and deal.current_status_id == s.id %}selected
+              {% elif not deal and loop.first %}selected{% endif %}>
+              {{ s.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="card p-5">
+        <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+          <i class="fa-solid fa-note-sticky text-blue-500"></i> Notes
+        </h3>
+        <textarea id="notes" name="notes" rows="4"
+                  placeholder="Comments, observations or references..."
+                  class="form-input resize-none">{{ deal.notes if deal else '' }}</textarea>
+      </div>
+    </div>
+
+    {# ── Right: Financial ─────────────────────────────────────────────────── #}
+    <div class="lg:col-span-2 space-y-5">
+
+      <div class="card p-5">
+        <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-calculator text-blue-500"></i> Financial Calculation
+        </h3>
+
+        <input type="hidden" id="use_redline" name="use_redline"
+               value="{{ '1' if (not deal or deal.use_redline) else '0' }}">
+
+        <div class="flex rounded-lg overflow-hidden border border-gray-200 mb-5 w-full max-w-md">
+          <button type="button" id="btn-redline-on" onclick="setRedline(true)"
+                  class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors">
+            <i class="fa-solid fa-calculator"></i> Redline Calculation
+          </button>
+          <button type="button" id="btn-redline-off" onclick="setRedline(false)"
+                  class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors border-l border-gray-200">
+            <i class="fa-solid fa-dollar-sign"></i> Fixed Amount
+          </button>
+        </div>
+
+        <div id="info-redline-on" class="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-4 hidden">
+          <i class="fa-solid fa-circle-info mr-1"></i>
+          <strong>Redline calculation active:</strong> Total Commission, Total PPW and Net PPW are calculated automatically.
+        </div>
+        <div id="info-redline-off" class="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-4 hidden">
+          <i class="fa-solid fa-circle-info mr-1"></i>
+          <strong>Fixed amount:</strong> Dealer does not provide granular data. Enter only the total amount owed.
+        </div>
+
+        {# ── Redline fields ── #}
+        <div id="redline-fields">
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label for="system_size" class="form-label">
+                System Size <span class="text-gray-400 font-normal">(W)</span>
+                <span class="text-red-500">*</span>
+              </label>
+              <input type="number" id="system_size" name="system_size"
+                     step="1" min="0"
+                     value="{{ deal.system_size if deal and deal.system_size is not none else '' }}"
+                     placeholder="e.g. 8000"
+                     oninput="calcLive()"
+                     class="form-input">
+            </div>
+            <div>
+              <label for="company_redline" class="form-label">
+                Company Redline <span class="text-gray-400 font-normal">($/W)</span>
+                <span class="text-red-500">*</span>
+              </label>
+              <input type="number" id="company_redline" name="company_redline"
+                     step="0.0001" min="0"
+                     value="{{ deal.company_redline if deal and deal.company_redline is not none else '' }}"
+                     placeholder="0.0000"
+                     oninput="calcLive()"
+                     class="form-input">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 mb-5">
+            <div>
+              <label for="adders" class="form-label">
+                Adders <span class="text-gray-400 font-normal">($)</span>
+              </label>
+              <input type="number" id="adders" name="adders"
+                     step="0.01" min="0"
+                     value="{{ deal.adders if deal and deal.adders is not none else '0' }}"
+                     placeholder="0.00"
+                     oninput="calcLive()"
+                     class="form-input">
+            </div>
+            <div>
+              <label for="contract_amount" class="form-label">
+                Contract Amount <span class="text-gray-400 font-normal">($)</span>
+                <span class="text-red-500">*</span>
+              </label>
+              <input type="number" id="contract_amount" name="contract_amount"
+                     step="0.01" min="0"
+                     value="{{ deal.contract_amount if deal and deal.contract_amount is not none else '' }}"
+                     placeholder="0.00"
+                     oninput="calcLive()"
+                     class="form-input">
+            </div>
+          </div>
+
+          <!-- Live preview -->
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+            <p class="text-xs font-bold text-slate-600 mb-3 uppercase tracking-wider flex items-center gap-1.5">
+              <i class="fa-solid fa-bolt text-amber-500"></i> Live Preview
+            </p>
+            <div class="grid grid-cols-3 gap-4">
+              <div class="text-center">
+                <p class="text-xs text-gray-500 mb-1">Total Commission</p>
+                <p id="calc_commission" class="text-lg font-bold text-green-600">—</p>
+                <p class="text-xs text-gray-400">= Contract - (W × $/W) - Adders</p>
+              </div>
+              <div class="text-center">
+                <p class="text-xs text-gray-500 mb-1">Total PPW</p>
+                <p id="calc_ppw" class="text-lg font-bold text-blue-600">—</p>
+                <p class="text-xs text-gray-400">= Contract / W</p>
+              </div>
+              <div class="text-center">
+                <p class="text-xs text-gray-500 mb-1">Net PPW</p>
+                <p id="calc_net_ppw" class="text-lg font-bold text-indigo-600">—</p>
+                <p class="text-xs text-gray-400">= (Contract - Adders) / W</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {# ── Fixed amount field ── #}
+        <div id="non-redline-fields" class="hidden">
+          <div>
+            <label for="amount_owed" class="form-label">
+              Total Amount Owed <span class="text-gray-400 font-normal">($)</span>
+              <span class="text-red-500">*</span>
+            </label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400 font-semibold">$</span>
+              <input type="number" id="amount_owed" name="amount_owed"
+                     step="0.01" min="0"
+                     value="{{ deal.amount_owed if deal and deal.amount_owed is not none else '' }}"
+                     placeholder="0.00"
+                     class="form-input pl-7">
+            </div>
+            <p class="text-xs text-gray-400 mt-1.5">Total amount owed by the dealer for this deal.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-3">
+        <a href="{{ url_for('dashboard') }}" class="btn-secondary">Cancel</a>
+        <button type="submit" class="btn-primary px-6">
+          <i class="fa-solid fa-{% if deal %}floppy-disk{% else %}plus{% endif %}"></i>
+          {% if deal %}Save Changes{% else %}Create Deal{% endif %}
+        </button>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const USE_REDLINE_INIT = {{ 'true' if (not deal or deal.use_redline) else 'false' }};
+
+  function setRedline(enabled) {
+    document.getElementById('use_redline').value = enabled ? '1' : '0';
+    document.getElementById('redline-fields').classList.toggle('hidden', !enabled);
+    document.getElementById('non-redline-fields').classList.toggle('hidden', enabled);
+    document.getElementById('info-redline-on').classList.toggle('hidden', !enabled);
+    document.getElementById('info-redline-off').classList.toggle('hidden', enabled);
+
+    const btnOn  = document.getElementById('btn-redline-on');
+    const btnOff = document.getElementById('btn-redline-off');
+    if (enabled) {
+      btnOn.classList.add('bg-blue-600','text-white');
+      btnOn.classList.remove('text-gray-500','hover:bg-gray-50');
+      btnOff.classList.remove('bg-blue-600','text-white');
+      btnOff.classList.add('text-gray-500','hover:bg-gray-50');
+    } else {
+      btnOff.classList.add('bg-blue-600','text-white');
+      btnOff.classList.remove('text-gray-500','hover:bg-gray-50');
+      btnOn.classList.remove('bg-blue-600','text-white');
+      btnOn.classList.add('text-gray-500','hover:bg-gray-50');
+    }
+    ['system_size','company_redline','contract_amount'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.required = enabled;
+    });
+    const ao = document.getElementById('amount_owed');
+    if (ao) ao.required = !enabled;
+    calcLive();
+  }
+
+  function calcLive() {
+    if (document.getElementById('use_redline').value !== '1') return;
+    const ss = parseFloat(document.getElementById('system_size').value)    || 0;
+    const cr = parseFloat(document.getElementById('company_redline').value) || 0;
+    const ad = parseFloat(document.getElementById('adders').value)         || 0;
+    const ca = parseFloat(document.getElementById('contract_amount').value) || 0;
+
+    const commission = ca - (ss * cr) - ad;
+    const ppw        = ss > 0 ? ca / ss : 0;
+    const net_ppw    = ss > 0 ? (ca - ad) / ss : 0;
+
+    const fmt  = v => '$' + v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const fmtW = v => '$' + v.toFixed(4) + '/W';
+
+    document.getElementById('calc_commission').textContent = fmt(commission);
+    document.getElementById('calc_ppw').textContent        = fmtW(ppw);
+    document.getElementById('calc_net_ppw').textContent    = fmtW(net_ppw);
+
+    const el = document.getElementById('calc_commission');
+    el.classList.remove('text-green-600','text-red-600');
+    el.classList.add(commission >= 0 ? 'text-green-600' : 'text-red-600');
+  }
+
+  setRedline(USE_REDLINE_INIT);
+  calcLive();
+</script>
+{% endblock %}

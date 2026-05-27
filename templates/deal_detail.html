@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+
+{% block title %}{{ deal.name }} — MOSES CRM{% endblock %}
+{% block page_title %}{{ deal.name }}{% endblock %}
+{% block page_subtitle %}<p class="text-xs text-gray-500 mt-0.5">Deal detail &bull; ID #{{ deal.id }}</p>{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('dashboard') }}" class="btn-secondary text-xs">
+  <i class="fa-solid fa-arrow-left"></i> Dashboard
+</a>
+{% if current_user.is_admin %}
+<a href="{{ url_for('deal_edit', deal_id=deal.id) }}" class="btn-primary text-xs">
+  <i class="fa-solid fa-pen"></i> Edit
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+  {# ── Left: Deal info ──────────────────────────────────────────────────────── #}
+  <div class="xl:col-span-2 space-y-5">
+
+    <!-- Header -->
+    <div class="card p-6">
+      <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 class="text-xl font-bold text-gray-900 mb-1">{{ deal.name }}</h2>
+          <div class="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+            <span class="flex items-center gap-1.5">
+              <i class="fa-solid fa-address-book text-orange-400"></i>
+              {{ deal.dealer.name if deal.dealer else '—' }}
+            </span>
+            <span class="text-gray-300">|</span>
+            <span><i class="fa-regular fa-calendar text-gray-400 mr-1"></i>{{ deal.created_at | fmt_dt }}</span>
+            {% if deal.creator %}
+            <span class="text-gray-300">|</span>
+            <span><i class="fa-solid fa-user text-gray-400 mr-1"></i>{{ deal.creator.email }}</span>
+            {% endif %}
+          </div>
+        </div>
+        {% if deal.current_status %}
+        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold
+                     {{ deal.current_status.color | status_badge }}">
+          <span class="w-2 h-2 rounded-full {{ deal.current_status.color | status_dot }}"></span>
+          {{ deal.current_status.name }}
+        </span>
+        {% endif %}
+      </div>
+      {% if deal.notes %}
+      <div class="mt-4 pt-4 border-t border-gray-100">
+        <p class="text-sm text-gray-600 leading-relaxed">
+          <i class="fa-solid fa-note-sticky text-gray-400 mr-1"></i> {{ deal.notes }}
+        </p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Payment summary -->
+    <div class="card p-6">
+      <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+        <i class="fa-solid fa-coins text-amber-500"></i> Payment Summary
+      </h3>
+      <div class="grid grid-cols-3 gap-4 mb-5">
+        <div class="text-center p-4 bg-gray-50 rounded-xl border border-gray-200">
+          <p class="text-xs text-gray-500 mb-1">Original Value</p>
+          <p class="text-xl font-black text-gray-800">{{ deal.original_value | currency }}</p>
+        </div>
+        <div class="text-center p-4 bg-green-50 rounded-xl border border-green-200">
+          <p class="text-xs text-green-600 mb-1">Total Paid</p>
+          <p class="text-xl font-black text-green-700">{{ (deal.amount_paid or 0) | currency }}</p>
+        </div>
+        <div class="text-center p-4 {% if deal.remaining_balance == 0 %}bg-green-50 border-green-200{% else %}bg-amber-50 border-amber-200{% endif %} rounded-xl border">
+          <p class="text-xs {% if deal.remaining_balance == 0 %}text-green-600{% else %}text-amber-600{% endif %} mb-1">Remaining</p>
+          <p class="text-xl font-black {% if deal.remaining_balance == 0 %}text-green-700{% else %}text-amber-700{% endif %}">
+            {{ deal.remaining_balance | currency }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="mb-1 flex items-center justify-between text-xs text-gray-500">
+        <span>Payment progress</span>
+        <span class="font-semibold">{{ deal.payment_pct }}%</span>
+      </div>
+      <div class="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+        <div class="h-3 rounded-full transition-all duration-500
+                    {% if deal.payment_pct >= 100 %}bg-green-500{% elif deal.payment_pct >= 50 %}bg-blue-500{% else %}bg-amber-400{% endif %}"
+             style="width: {{ deal.payment_pct }}%"></div>
+      </div>
+
+      <!-- Payment history table -->
+      {% if deal.payments %}
+      <div class="mt-5">
+        <h4 class="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3">
+          <i class="fa-solid fa-list mr-1"></i> Payment History ({{ deal.payments | length }})
+        </h4>
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 text-left">
+              <th class="px-3 py-2 text-xs font-semibold text-gray-500 rounded-tl-lg">Date</th>
+              <th class="px-3 py-2 text-xs font-semibold text-gray-500 text-right">Amount</th>
+              <th class="px-3 py-2 text-xs font-semibold text-gray-500">Note</th>
+              <th class="px-3 py-2 text-xs font-semibold text-gray-500">Recorded by</th>
+              {% if current_user.is_admin %}
+              <th class="px-3 py-2 text-xs font-semibold text-gray-500 rounded-tr-lg"></th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in deal.payments %}
+            <tr class="border-t border-gray-100">
+              <td class="px-3 py-2.5 text-xs text-gray-500">{{ p.paid_at | fmt_dt }}</td>
+              <td class="px-3 py-2.5 text-right font-bold text-green-600">{{ p.amount | currency }}</td>
+              <td class="px-3 py-2.5 text-xs text-gray-500">{{ p.note or '—' }}</td>
+              <td class="px-3 py-2.5 text-xs text-gray-400">{{ p.recorder.email if p.recorder else '—' }}</td>
+              {% if current_user.is_admin %}
+              <td class="px-3 py-2.5 text-right">
+                <form method="POST"
+                      action="{{ url_for('payment_delete', deal_id=deal.id, payment_id=p.id) }}"
+                      onsubmit="return confirm('Delete payment of {{ p.amount | currency }}? This cannot be undone.')">
+                  <button type="submit"
+                          class="text-red-400 hover:text-red-600 transition-colors"
+                          title="Delete payment">
+                    <i class="fa-solid fa-trash text-xs"></i>
+                  </button>
+                </form>
+              </td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+            <tr class="border-t-2 border-gray-200 bg-gray-50">
+              <td class="px-3 py-2 text-xs font-bold text-gray-700">Total</td>
+              <td class="px-3 py-2 text-right font-black text-green-700">{{ (deal.amount_paid or 0) | currency }}</td>
+              <td colspan="{% if current_user.is_admin %}3{% else %}2{% endif %}"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Financial details -->
+    {% if deal.use_redline %}
+    <div class="card p-6">
+      <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+        <span class="w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center">
+          <i class="fa-solid fa-calculator text-indigo-600 text-xs"></i>
+        </span>
+        Redline Calculation
+      </h3>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+        <div class="bg-gray-50 rounded-xl p-4 text-center">
+          <p class="text-xs text-gray-500 mb-1">System Size</p>
+          <p class="text-lg font-bold text-gray-800">{{ "%g" | format(deal.system_size or 0) }}</p>
+          <p class="text-xs text-gray-400">W</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-4 text-center">
+          <p class="text-xs text-gray-500 mb-1">Redline</p>
+          <p class="text-lg font-bold text-gray-800">${{ "%.4f" | format(deal.company_redline or 0) }}</p>
+          <p class="text-xs text-gray-400">per watt</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-4 text-center">
+          <p class="text-xs text-gray-500 mb-1">Adders</p>
+          <p class="text-lg font-bold text-gray-800">{{ deal.adders | currency }}</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-4 text-center">
+          <p class="text-xs text-gray-500 mb-1">Contract Amount</p>
+          <p class="text-lg font-bold text-gray-800">{{ deal.contract_amount | currency }}</p>
+        </div>
+      </div>
+      <div class="bg-slate-900 rounded-xl p-4 mb-4 text-xs text-slate-300 font-mono">
+        <p class="text-slate-500 mb-1"># Applied formula</p>
+        <p>Commission = {{ deal.contract_amount | currency }} - ({{ "%g" | format(deal.system_size or 0) }}W × ${{ "%.4f" | format(deal.company_redline or 0) }}/W) - {{ deal.adders | currency }}</p>
+        <p class="text-green-400 mt-0.5">           = <strong>{{ deal.total_commission | currency }}</strong></p>
+      </div>
+      <div class="grid grid-cols-3 gap-4">
+        <div class="text-center p-4 bg-green-50 border border-green-200 rounded-xl">
+          <p class="text-xs text-green-600 font-semibold mb-1">Total Commission</p>
+          <p class="text-2xl font-black {{ 'text-green-700' if (deal.total_commission or 0) >= 0 else 'text-red-600' }}">
+            {{ deal.total_commission | currency }}
+          </p>
+        </div>
+        <div class="text-center p-4 bg-blue-50 border border-blue-200 rounded-xl">
+          <p class="text-xs text-blue-600 font-semibold mb-1">Total PPW</p>
+          <p class="text-2xl font-black text-blue-700">${{ "%.4f" | format(deal.total_ppw or 0) }}</p>
+          <p class="text-xs text-blue-400">$/W</p>
+        </div>
+        <div class="text-center p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+          <p class="text-xs text-indigo-600 font-semibold mb-1">Net PPW</p>
+          <p class="text-2xl font-black text-indigo-700">${{ "%.4f" | format(deal.net_ppw or 0) }}</p>
+          <p class="text-xs text-indigo-400">$/W</p>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="card p-6">
+      <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+        <i class="fa-solid fa-dollar-sign text-slate-500"></i> Fixed Amount (No Redline)
+      </h3>
+      <div class="text-center p-8 bg-slate-50 rounded-xl border border-slate-200">
+        <p class="text-xs text-gray-500 font-semibold mb-2 uppercase tracking-wider">Total Amount Owed</p>
+        <p class="text-4xl font-black text-gray-800">{{ deal.amount_owed | currency }}</p>
+        <p class="text-sm text-gray-400 mt-2">Dealer does not provide granular data</p>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# ── Right: Payments + Status ─────────────────────────────────────────────── #}
+  <div class="xl:col-span-1 space-y-5">
+
+    {# ── Record Payment card ── show when there's a remaining balance #}
+    {% if deal.remaining_balance > 0 %}
+    <div class="card p-5 border-green-300" style="border-color: #86efac;">
+      <h3 class="text-sm font-bold text-gray-700 mb-1 flex items-center gap-2">
+        <i class="fa-solid fa-money-bill-wave text-green-500"></i> Record Payment
+      </h3>
+      <p class="text-xs text-gray-400 mb-4">
+        Remaining: <span class="font-bold text-amber-600">{{ deal.remaining_balance | currency }}</span>
+      </p>
+      <form method="POST" action="{{ url_for('deal_add_payment', deal_id=deal.id) }}">
+        <div class="mb-3">
+          <label class="form-label">Payment Amount ($) <span class="text-red-500">*</span></label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400 font-semibold text-sm">$</span>
+            <input type="number" name="payment_amount" step="0.01" min="0.01"
+                   max="{{ deal.remaining_balance }}" required
+                   placeholder="0.00"
+                   class="form-input pl-7"
+                   oninput="updatePreview(this.value)">
+          </div>
+          <p id="balance-preview" class="text-xs text-gray-400 mt-1"></p>
+        </div>
+        <div class="mb-4">
+          <label class="form-label">Note (optional)</label>
+          <input type="text" name="note" placeholder="e.g. Wire transfer received..."
+                 class="form-input">
+        </div>
+        <button type="submit" class="btn-green w-full justify-center text-sm">
+          <i class="fa-solid fa-circle-check"></i> Record Payment
+        </button>
+      </form>
+    </div>
+    {% else %}
+    <div class="card p-5 bg-green-50 border-green-200">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-circle-check text-green-600 text-lg"></i>
+        </div>
+        <div>
+          <p class="text-sm font-bold text-green-800">Fully Paid</p>
+          <p class="text-xs text-green-600">This deal has been paid in full.</p>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Update Status -->
+    <div class="card p-5">
+      <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+        <i class="fa-solid fa-arrows-rotate text-blue-500"></i> Update Status
+      </h3>
+      <form method="POST" action="{{ url_for('deal_update_status', deal_id=deal.id) }}" id="status-form">
+        <div class="mb-3">
+          <label class="form-label">New Status</label>
+          <select name="status_id" id="status-select" class="form-input">
+            {% for s in statuses %}
+            <option value="{{ s.id }}"
+                    {% if deal.current_status_id == s.id %}selected{% endif %}>
+              {{ s.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label">Note (optional)</label>
+          <input type="text" name="note" placeholder="Add a comment — submit without changing status to log a note only."
+                 class="form-input">
+        </div>
+        <button type="submit" class="btn-primary w-full justify-center text-sm">
+          <i class="fa-solid fa-check"></i> Update Status
+        </button>
+      </form>
+    </div>
+
+    <!-- Status Timeline -->
+    <div class="card p-5">
+      <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+        <i class="fa-solid fa-timeline text-blue-500"></i> Status History
+      </h3>
+      {% if history %}
+      <div class="space-y-0">
+        {% for item in history | reverse %}
+        <div class="flex gap-3 {% if not loop.last %}pb-4{% endif %}">
+          <div class="flex flex-col items-center">
+            <div class="w-3 h-3 rounded-full flex-shrink-0 mt-1
+                        {% if item.is_current %}ring-2 ring-blue-400 ring-offset-1 bg-blue-500
+                        {% else %}bg-gray-300{% endif %}"></div>
+            {% if not loop.last %}
+            <div class="w-0.5 flex-1 bg-gray-200 mt-1 min-h-[1.5rem]"></div>
+            {% endif %}
+          </div>
+          <div class="flex-1 pb-4 {% if not loop.last %}border-b border-dashed border-gray-100{% endif %}">
+            <div class="flex items-start justify-between gap-2">
+              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold
+                           {{ item.entry.status.color | status_badge }}">
+                {{ item.entry.status.name }}
+              </span>
+              {% if item.is_current %}
+              <span class="text-xs text-blue-600 font-semibold">current</span>
+              {% endif %}
+            </div>
+            <p class="text-xs text-gray-400 mt-1.5">
+              <i class="fa-regular fa-clock mr-1"></i>{{ item.entry.changed_at | fmt_dt }}
+            </p>
+            {% if item.entry.note %}
+            <p class="text-xs text-gray-500 mt-1 italic">"{{ item.entry.note }}"</p>
+            {% endif %}
+            {% if item.entry.changer %}
+            <p class="text-xs text-gray-400 mt-0.5">
+              <i class="fa-solid fa-user mr-1"></i>{{ item.entry.changer.email }}
+            </p>
+            {% endif %}
+            <div class="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gray-100 text-gray-500 text-xs">
+              <i class="fa-regular fa-hourglass text-xs"></i> {{ item.duration }}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-center py-6 text-gray-400">
+        <i class="fa-solid fa-clock-rotate-left text-2xl mb-2"></i>
+        <p class="text-xs">No status history yet</p>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const REMAINING = {{ deal.remaining_balance }};
+
+  function updatePreview(val) {
+    const v = parseFloat(val) || 0;
+    const preview = document.getElementById('balance-preview');
+    if (v > 0 && v <= REMAINING) {
+      const after = Math.max(REMAINING - v, 0);
+      preview.textContent = `After payment: $${after.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})} remaining`;
+      preview.className = 'text-xs mt-1 ' + (after === 0 ? 'text-green-600 font-semibold' : 'text-gray-400');
+    } else {
+      preview.textContent = '';
+    }
+  }
+</script>
+{% endblock %}

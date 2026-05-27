@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Status Management — MOSES CRM{% endblock %}
+{% block page_title %}Status Management{% endblock %}
+{% block page_subtitle %}<p class="text-xs text-gray-500 mt-0.5">Define the pipeline stages and their chronological order</p>{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+  {# ── Left: Current statuses ───────────────────────────────────────────── #}
+  <div class="lg:col-span-2">
+    <div class="card overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100">
+        <h2 class="text-sm font-semibold text-gray-700">
+          Pipeline Stages
+          <span class="ml-1 text-gray-400 font-normal">({{ statuses | length }} statuses)</span>
+        </h2>
+        <p class="text-xs text-gray-400 mt-0.5">The order number defines the chronological sequence of the pipeline.</p>
+      </div>
+
+      {% if statuses %}
+      <div class="divide-y divide-gray-100">
+        {% for s in statuses %}
+        <div class="px-5 py-4 flex items-center gap-4">
+          <div class="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold text-gray-500">
+            {{ s.order }}
+          </div>
+          <div class="flex-1 flex items-center gap-3">
+            <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold
+                         {{ s.color | status_badge }}">
+              <span class="w-2 h-2 rounded-full {{ s.color | status_dot }}"></span>
+              {{ s.name }}
+            </span>
+            {% if s.is_default %}
+            <span class="text-xs text-gray-400 italic">default</span>
+            {% endif %}
+          </div>
+          <span class="text-xs text-gray-400">{{ s.deals | length }} deal(s)</span>
+          <div class="flex items-center gap-1">
+            <button onclick="openEdit({{ s.id }}, '{{ s.name }}', {{ s.order }}, '{{ s.color }}')"
+                    class="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Edit">
+              <i class="fa-solid fa-pen text-sm"></i>
+            </button>
+            {% if not s.is_default %}
+            <form method="POST" action="{{ url_for('admin_statuses') }}"
+                  onsubmit="return confirm('Delete status «{{ s.name }}»?')">
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="status_id" value="{{ s.id }}">
+              <button type="submit"
+                      class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                <i class="fa-solid fa-trash text-sm"></i>
+              </button>
+            </form>
+            {% else %}
+            <span class="p-1.5 text-gray-200 cursor-not-allowed" title="Default statuses cannot be deleted">
+              <i class="fa-solid fa-lock text-sm"></i>
+            </span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="py-12 text-center text-gray-400">
+        <i class="fa-solid fa-tags text-3xl mb-2"></i>
+        <p class="text-sm">No statuses configured</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Right: Create / Edit ─────────────────────────────────────────────── #}
+  <div class="lg:col-span-1 space-y-5">
+
+    <div class="card p-5" id="create-card">
+      <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+        <i class="fa-solid fa-plus-circle text-blue-500"></i> New Status
+      </h3>
+      <form method="POST" action="{{ url_for('admin_statuses') }}">
+        <input type="hidden" name="action" value="create">
+        <div class="mb-3">
+          <label class="form-label">Name <span class="text-red-500">*</span></label>
+          <input type="text" name="name" required placeholder="e.g. Under Review, Rejected..."
+                 class="form-input">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">
+            Order <span class="text-gray-400 font-normal text-xs">(lower = earlier in pipeline)</span>
+          </label>
+          <input type="number" name="order" value="{{ statuses | length + 1 }}"
+                 min="1" max="999" class="form-input">
+        </div>
+        <div class="mb-4">
+          <label class="form-label">Badge Color</label>
+          <div class="grid grid-cols-4 gap-2" id="color-grid-create">
+            {% for c in COLOR_OPTIONS %}
+            <label class="cursor-pointer">
+              <input type="radio" name="color" value="{{ c }}"
+                     {% if c == 'gray' %}checked{% endif %}
+                     class="sr-only">
+              <div class="p-2 rounded-lg border-2 border-transparent transition-all
+                          {% if c == 'gray' %}ring-2 ring-offset-1 ring-blue-500 border-blue-300{% endif %}"
+                   data-color="{{ c }}"
+                   onclick="selectColor('create', '{{ c }}', this)">
+                <div class="w-full h-5 rounded bg-{{ c }}-400"></div>
+                <p class="text-xs text-center mt-1 capitalize text-gray-500">{{ c }}</p>
+              </div>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <button type="submit" class="btn-primary w-full justify-center">
+          <i class="fa-solid fa-plus"></i> Create Status
+        </button>
+      </form>
+    </div>
+
+    <div class="card p-5 border-amber-200 bg-amber-50 hidden" id="edit-card">
+      <h3 class="text-sm font-bold text-amber-800 mb-4 flex items-center gap-2">
+        <i class="fa-solid fa-pen text-amber-600"></i> Edit Status
+      </h3>
+      <form method="POST" action="{{ url_for('admin_statuses') }}">
+        <input type="hidden" name="action" value="update">
+        <input type="hidden" name="status_id" id="edit_status_id">
+        <div class="mb-3">
+          <label class="form-label">Name <span class="text-red-500">*</span></label>
+          <input type="text" name="name" id="edit_name" required class="form-input">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Order</label>
+          <input type="number" name="order" id="edit_order" min="1" max="999" class="form-input">
+        </div>
+        <div class="mb-4">
+          <label class="form-label">Badge Color</label>
+          <div class="grid grid-cols-4 gap-2" id="color-grid-edit">
+            {% for c in COLOR_OPTIONS %}
+            <label class="cursor-pointer">
+              <input type="radio" name="color" value="{{ c }}" class="sr-only">
+              <div class="p-2 rounded-lg border-2 border-transparent transition-all"
+                   data-color="{{ c }}"
+                   onclick="selectColor('edit', '{{ c }}', this)">
+                <div class="w-full h-5 rounded bg-{{ c }}-400"></div>
+                <p class="text-xs text-center mt-1 capitalize text-gray-500">{{ c }}</p>
+              </div>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button type="button" onclick="closeEdit()" class="btn-secondary flex-1 justify-center text-sm">Cancel</button>
+          <button type="submit" class="btn-primary flex-1 justify-center text-sm">
+            <i class="fa-solid fa-floppy-disk"></i> Save
+          </button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function openEdit(id, name, order, color) {
+    document.getElementById('edit_status_id').value = id;
+    document.getElementById('edit_name').value = name;
+    document.getElementById('edit_order').value = order;
+    document.getElementById('edit-card').classList.remove('hidden');
+    document.getElementById('create-card').classList.add('opacity-50','pointer-events-none');
+    selectColor('edit', color, null);
+    document.getElementById('edit-card').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  function closeEdit() {
+    document.getElementById('edit-card').classList.add('hidden');
+    document.getElementById('create-card').classList.remove('opacity-50','pointer-events-none');
+  }
+  function selectColor(mode, color, clickedEl) {
+    const grid = document.getElementById('color-grid-' + mode);
+    grid.querySelectorAll('[data-color]').forEach(el => {
+      el.classList.remove('ring-2','ring-offset-1','ring-blue-500','border-blue-300');
+    });
+    const target = clickedEl || grid.querySelector('[data-color="' + color + '"]');
+    if (target) target.classList.add('ring-2','ring-offset-1','ring-blue-500','border-blue-300');
+    grid.closest('form').querySelectorAll('input[name="color"]').forEach(r => {
+      r.checked = r.value === color;
+    });
+  }
+</script>
+{% endblock %}
