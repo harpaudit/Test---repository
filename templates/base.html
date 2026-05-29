@@ -354,9 +354,35 @@
       <a href="{{ url_for('deal_new') }}" class="mw-newbtn">
         <i class="fa-solid fa-plus"></i>New deal
       </a>
-      <a href="{{ url_for('logout') }}" class="mw-avatar" title="Sign out — {{ current_user.email }}">
-        {{ current_user.email[0].upper() }}
-      </a>
+      <div style="position:relative;" tabindex="0" id="avatar-wrap">
+        <div class="mw-avatar" title="{{ current_user.email }}" onclick="document.getElementById('avatar-wrap').focus()">
+          {{ current_user.email[0].upper() }}
+        </div>
+        <div style="display:none;position:absolute;right:0;top:38px;z-index:300;
+                    background:#fff;border:1px solid var(--border);border-radius:10px;
+                    box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:180px;overflow:hidden;"
+             id="avatar-menu">
+          <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border-soft);">
+            <div style="font-size:11px;color:var(--muted);">Signed in as</div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-top:2px;word-break:break-all;">{{ current_user.email }}</div>
+          </div>
+          <a href="{{ url_for('logout') }}"
+             style="display:flex;align-items:center;gap:9px;padding:10px 14px;
+                    font-size:13px;font-weight:500;color:var(--red);text-decoration:none;
+                    transition:background .1s;"
+             onmouseover="this.style.background='#faf1ec'" onmouseout="this.style.background=''">
+            <i class="fa-solid fa-right-from-bracket" style="font-size:12px;"></i>Log out
+          </a>
+        </div>
+      </div>
+      <script>
+        (function(){
+          const wrap = document.getElementById('avatar-wrap');
+          const menu = document.getElementById('avatar-menu');
+          wrap.addEventListener('focus', () => menu.style.display = 'block');
+          wrap.addEventListener('blur',  () => setTimeout(() => menu.style.display = 'none', 150));
+        })();
+      </script>
     </div>
   </nav>
 
