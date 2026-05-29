@@ -1,188 +1,296 @@
 {% extends "base.html" %}
-
 {% block title %}Status Management — MOSES CRM{% endblock %}
-{% block page_title %}Status Management{% endblock %}
-{% block page_subtitle %}<p class="text-xs text-gray-500 mt-0.5">Define the pipeline stages and their chronological order</p>{% endblock %}
 
 {% block content %}
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<style>
+  .as-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 20px; align-items: start; }
 
-  {# ── Left: Current statuses ───────────────────────────────────────────── #}
-  <div class="lg:col-span-2">
-    <div class="card overflow-hidden">
-      <div class="px-5 py-4 border-b border-gray-100">
-        <h2 class="text-sm font-semibold text-gray-700">
-          Pipeline Stages
-          <span class="ml-1 text-gray-400 font-normal">({{ statuses | length }} statuses)</span>
-        </h2>
-        <p class="text-xs text-gray-400 mt-0.5">The order number defines the chronological sequence of the pipeline.</p>
-      </div>
+  .as-row { display: grid; grid-template-columns: 28px 36px 1fr auto auto 60px; gap: 14px; align-items: center; padding: 14px 14px 14px 0; border-bottom: 1px solid var(--border-soft); }
+  .as-row:last-child { border-bottom: none; }
+  .as-row:hover { background: var(--surface-2); }
+  .as-grip  { color: var(--muted-2); padding-left: 16px; font-size: 13px; }
+  .as-order { width: 32px; height: 32px; border-radius: 8px; background: var(--surface-2); color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; border: 1px solid var(--border-soft); font-feature-settings: 'tnum'; }
+  .as-name  { display: flex; align-items: center; gap: 10px; }
+  .as-name .lock { font-size: 10px; color: var(--muted-2); text-transform: uppercase; letter-spacing: .1em; }
+  .as-deals { font-size: 12px; color: var(--muted); font-feature-settings: 'tnum'; }
+  .as-deals b { color: var(--text); font-weight: 500; }
+  .as-actions { display: flex; gap: 4px; }
+  .as-actions button, .as-actions .lock-icon { width: 28px; height: 28px; border-radius: 6px; background: transparent; border: none; cursor: pointer; color: var(--muted-2); font-size: 12px; display: flex; align-items: center; justify-content: center; }
+  .as-actions button:hover { background: var(--border-soft); color: var(--text); }
+  .as-actions button.edit:hover { color: var(--accent); }
+  .as-actions button.del:hover  { color: var(--red); }
+  .as-actions button:disabled   { opacity: .35; cursor: not-allowed; }
+  .as-actions .lock-icon        { opacity: .35; cursor: not-allowed; }
 
-      {% if statuses %}
-      <div class="divide-y divide-gray-100">
-        {% for s in statuses %}
-        <div class="px-5 py-4 flex items-center gap-4">
-          <div class="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold text-gray-500">
-            {{ s.order }}
-          </div>
-          <div class="flex-1 flex items-center gap-3">
-            <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold
-                         {{ s.color | status_badge }}">
-              <span class="w-2 h-2 rounded-full {{ s.color | status_dot }}"></span>
-              {{ s.name }}
-            </span>
-            {% if s.is_default %}
-            <span class="text-xs text-gray-400 italic">default</span>
-            {% endif %}
-          </div>
-          <span class="text-xs text-gray-400">{{ s.deals | length }} deal(s)</span>
-          <div class="flex items-center gap-1">
-            <button onclick="openEdit({{ s.id }}, '{{ s.name }}', {{ s.order }}, '{{ s.color }}')"
-                    class="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Edit">
-              <i class="fa-solid fa-pen text-sm"></i>
-            </button>
-            {% if not s.is_default %}
-            <form method="POST" action="{{ url_for('admin_statuses') }}"
-                  onsubmit="return confirm('Delete status «{{ s.name }}»?')">
-              <input type="hidden" name="action" value="delete">
-              <input type="hidden" name="status_id" value="{{ s.id }}">
-              <button type="submit"
-                      class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
-                <i class="fa-solid fa-trash text-sm"></i>
-              </button>
-            </form>
-            {% else %}
-            <span class="p-1.5 text-gray-200 cursor-not-allowed" title="Default statuses cannot be deleted">
-              <i class="fa-solid fa-lock text-sm"></i>
-            </span>
-            {% endif %}
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-      {% else %}
-      <div class="py-12 text-center text-gray-400">
-        <i class="fa-solid fa-tags text-3xl mb-2"></i>
-        <p class="text-sm">No statuses configured</p>
-      </div>
-      {% endif %}
-    </div>
+  .as-colors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .as-color  { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 0; border: 2px solid transparent; border-radius: 10px; cursor: pointer; background: var(--surface-2); transition: background .12s, border-color .12s; }
+  .as-color:hover { background: #fff; }
+  .as-color.sel   { border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px rgba(63,102,81,.1); }
+  .as-color .sw   { width: 28px; height: 14px; border-radius: 4px; }
+  .as-color .lbl  { font-size: 10px; color: var(--muted); text-transform: capitalize; }
+  .as-color.sel .lbl { color: var(--text); font-weight: 500; }
+
+  .as-preview { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: var(--surface-2); border-radius: 10px; margin-bottom: 14px; }
+  .as-preview .lbl { font-size: 11px; color: var(--muted); }
+  .sortable-ghost { opacity: .4; background: var(--green-soft) !important; }
+</style>
+
+<div class="mw-page-head">
+  <div>
+    <div class="mw-h1">Status management</div>
+    <div class="mw-hsub">Define the pipeline stages and their chronological order. Lower order = earlier in pipeline.</div>
   </div>
+  <span class="mw-chip gray"><span class="dot"></span>{{ statuses | length }} stage{{ 's' if statuses | length != 1 }}</span>
+</div>
 
-  {# ── Right: Create / Edit ─────────────────────────────────────────────── #}
-  <div class="lg:col-span-1 space-y-5">
+<div class="as-grid">
 
-    <div class="card p-5" id="create-card">
-      <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
-        <i class="fa-solid fa-plus-circle text-blue-500"></i> New Status
-      </h3>
-      <form method="POST" action="{{ url_for('admin_statuses') }}">
-        <input type="hidden" name="action" value="create">
-        <div class="mb-3">
-          <label class="form-label">Name <span class="text-red-500">*</span></label>
-          <input type="text" name="name" required placeholder="e.g. Under Review, Rejected..."
-                 class="form-input">
-        </div>
-        <div class="mb-3">
-          <label class="form-label">
-            Order <span class="text-gray-400 font-normal text-xs">(lower = earlier in pipeline)</span>
-          </label>
-          <input type="number" name="order" value="{{ statuses | length + 1 }}"
-                 min="1" max="999" class="form-input">
-        </div>
-        <div class="mb-4">
-          <label class="form-label">Badge Color</label>
-          <div class="grid grid-cols-4 gap-2" id="color-grid-create">
-            {% for c in COLOR_OPTIONS %}
-            <label class="cursor-pointer">
-              <input type="radio" name="color" value="{{ c }}"
-                     {% if c == 'gray' %}checked{% endif %}
-                     class="sr-only">
-              <div class="p-2 rounded-lg border-2 border-transparent transition-all
-                          {% if c == 'gray' %}ring-2 ring-offset-1 ring-blue-500 border-blue-300{% endif %}"
-                   data-color="{{ c }}"
-                   onclick="selectColor('create', '{{ c }}', this)">
-                <div class="w-full h-5 rounded bg-{{ c }}-400"></div>
-                <p class="text-xs text-center mt-1 capitalize text-gray-500">{{ c }}</p>
-              </div>
-            </label>
-            {% endfor %}
-          </div>
-        </div>
-        <button type="submit" class="btn-primary w-full justify-center">
-          <i class="fa-solid fa-plus"></i> Create Status
-        </button>
-      </form>
+  <!-- LEFT: Pipeline stages list -->
+  <div class="mw-card" style="padding:0;">
+    <div class="mw-card-head" style="padding:18px 22px 12px;">
+      <div class="mw-card-title"><i class="fa-solid fa-layer-group"></i>Pipeline stages</div>
+      {% set total_deal_count = namespace(v=0) %}{% for s in statuses %}{% set total_deal_count.v = total_deal_count.v + (s.deals | length) %}{% endfor %}
+      <div class="mw-card-meta">{{ total_deal_count.v }} deal{{ 's' if total_deal_count.v != 1 }} across all stages</div>
     </div>
 
-    <div class="card p-5 border-amber-200 bg-amber-50 hidden" id="edit-card">
-      <h3 class="text-sm font-bold text-amber-800 mb-4 flex items-center gap-2">
-        <i class="fa-solid fa-pen text-amber-600"></i> Edit Status
-      </h3>
-      <form method="POST" action="{{ url_for('admin_statuses') }}">
-        <input type="hidden" name="action" value="update">
-        <input type="hidden" name="status_id" id="edit_status_id">
-        <div class="mb-3">
-          <label class="form-label">Name <span class="text-red-500">*</span></label>
-          <input type="text" name="name" id="edit_name" required class="form-input">
+    {% if statuses %}
+    <div id="stages-list">
+      {% for s in statuses %}
+      <div class="as-row" data-id="{{ s.id }}">
+        <div class="as-grip" style="cursor:grab;"><i class="fa-solid fa-grip-vertical"></i></div>
+        <div class="as-order" id="order-badge-{{ s.id }}">{{ s.order }}</div>
+        <div class="as-name">
+          <span class="mw-chip {{ s.color | mw_chip }}">
+            <span class="dot" style="background:{{ s.color | mw_dot }};"></span>
+            {{ s.name }}
+          </span>
         </div>
-        <div class="mb-3">
-          <label class="form-label">Order</label>
-          <input type="number" name="order" id="edit_order" min="1" max="999" class="form-input">
-        </div>
-        <div class="mb-4">
-          <label class="form-label">Badge Color</label>
-          <div class="grid grid-cols-4 gap-2" id="color-grid-edit">
-            {% for c in COLOR_OPTIONS %}
-            <label class="cursor-pointer">
-              <input type="radio" name="color" value="{{ c }}" class="sr-only">
-              <div class="p-2 rounded-lg border-2 border-transparent transition-all"
-                   data-color="{{ c }}"
-                   onclick="selectColor('edit', '{{ c }}', this)">
-                <div class="w-full h-5 rounded bg-{{ c }}-400"></div>
-                <p class="text-xs text-center mt-1 capitalize text-gray-500">{{ c }}</p>
-              </div>
-            </label>
-            {% endfor %}
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <button type="button" onclick="closeEdit()" class="btn-secondary flex-1 justify-center text-sm">Cancel</button>
-          <button type="submit" class="btn-primary flex-1 justify-center text-sm">
-            <i class="fa-solid fa-floppy-disk"></i> Save
+        {% set n = s.deals | length %}<div class="as-deals"><b>{{ n }}</b> deal{{ 's' if n != 1 }}</div>
+        <div class="as-actions">
+          <button type="button" class="edit" title="Edit"
+                  data-id="{{ s.id }}"
+                  data-name="{{ s.name | e }}"
+                  data-order="{{ s.order }}"
+                  data-color="{{ s.color }}"
+                  onclick="openEdit(this.dataset.id, this.dataset.name, this.dataset.order, this.dataset.color)">
+            <i class="fa-solid fa-pen"></i>
           </button>
+          {% if s.deals %}
+          <span class="lock-icon" title="Cannot delete: has {{ s.deals | length }} deal(s)">
+            <i class="fa-solid fa-lock" style="font-size:11px;"></i>
+          </span>
+          {% else %}
+          <form method="POST" action="{{ url_for('admin_statuses') }}" style="margin:0;"
+                onsubmit="return confirm('Delete stage «{{ s.name | e }}»? This cannot be undone.')">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="status_id" value="{{ s.id }}">
+            <button type="submit" class="del" title="Delete">
+              <i class="fa-solid fa-trash" style="font-size:11px;"></i>
+            </button>
+          </form>
+          {% endif %}
         </div>
-      </form>
+        <div style="text-align:right;padding-right:22px;display:flex;gap:6px;justify-content:flex-end;">
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="mw-empty">
+      <i class="fa-solid fa-tags"></i>
+      <div class="title">No statuses yet</div>
+      <div class="sub">Create your first pipeline stage.</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- RIGHT: Create / Edit form -->
+  <div>
+    <div class="mw-card" id="form-card">
+      <div class="mw-card-head">
+        <div class="mw-card-title" id="form-title">
+          <i class="fa-solid fa-plus" id="form-icon"></i>
+          <span id="form-label">New status</span>
+        </div>
+        <button type="button" id="cancel-edit-btn" onclick="closeEdit()" class="mw-btn sm ghost" style="display:none;">
+          Cancel edit
+        </button>
+      </div>
+
+      <!-- Live chip preview -->
+      <div class="as-preview">
+        <span class="lbl">Preview</span>
+        <span class="mw-chip" id="chip-preview" style="background:#fafaf6;border-color:#e8e3d8;color:#5b6b5e;">
+          <span class="dot" id="chip-dot" style="background:#a4a895;"></span>
+          <span id="chip-text">New status</span>
+        </span>
+      </div>
+
+      <!-- Create form -->
+      <div id="create-form">
+        <form method="POST" action="{{ url_for('admin_statuses') }}">
+          <input type="hidden" name="action" value="create">
+          <div class="mw-field">
+            <label class="mw-form-lbl">Name <span class="req">*</span></label>
+            <input type="text" name="name" required placeholder="e.g. Under Review, Rejected…" class="mw-input"
+                   oninput="document.getElementById('chip-text').textContent = this.value || 'New status'">
+          </div>
+          <div class="mw-field">
+            <label class="mw-form-lbl">Order <span class="hint">lower = earlier in pipeline</span></label>
+            <input type="number" name="order" value="{{ statuses | length + 1 }}" min="1" max="999" class="mw-input mono">
+          </div>
+          <div class="mw-field" style="margin-bottom:16px;">
+            <label class="mw-form-lbl">Badge color</label>
+            <div class="as-colors" id="colors-create">
+              {% for c in COLOR_OPTIONS %}
+              <div class="as-color {% if c == 'gray' %}sel{% endif %}" data-color="{{ c }}"
+                   onclick="selectColor('create', '{{ c }}', this)">
+                <div class="sw" style="background:{{ c | mw_dot }};"></div>
+                <div class="lbl">{{ c }}</div>
+              </div>
+              {% endfor %}
+            </div>
+            <input type="hidden" name="color" id="create-color" value="gray">
+          </div>
+          <button type="submit" class="mw-btn accent mw-btn-full">
+            <i class="fa-solid fa-plus"></i>Create status
+          </button>
+        </form>
+      </div>
+
+      <!-- Edit form -->
+      <div id="edit-form" style="display:none;">
+        <form method="POST" action="{{ url_for('admin_statuses') }}">
+          <input type="hidden" name="action" value="update">
+          <input type="hidden" name="status_id" id="edit-status-id">
+          <div class="mw-field">
+            <label class="mw-form-lbl">Name <span class="req">*</span></label>
+            <input type="text" name="name" id="edit-name" required class="mw-input"
+                   oninput="document.getElementById('chip-text').textContent = this.value || 'Edit status'">
+          </div>
+          <div class="mw-field">
+            <label class="mw-form-lbl">Order <span class="hint">lower = earlier in pipeline</span></label>
+            <input type="number" name="order" id="edit-order" min="1" max="999" class="mw-input mono">
+          </div>
+          <div class="mw-field" style="margin-bottom:16px;">
+            <label class="mw-form-lbl">Badge color</label>
+            <div class="as-colors" id="colors-edit">
+              {% for c in COLOR_OPTIONS %}
+              <div class="as-color" data-color="{{ c }}"
+                   onclick="selectColor('edit', '{{ c }}', this)">
+                <div class="sw" style="background:{{ c | mw_dot }};"></div>
+                <div class="lbl">{{ c }}</div>
+              </div>
+              {% endfor %}
+            </div>
+            <input type="hidden" name="color" id="edit-color" value="gray">
+          </div>
+          <button type="submit" class="mw-btn accent mw-btn-full">
+            <i class="fa-solid fa-floppy-disk"></i>Save changes
+          </button>
+        </form>
+      </div>
     </div>
 
+    <div class="mw-alert info">
+      <i class="fa-solid fa-circle-info"></i>
+      <div>
+        <b>Heads up:</b> Renaming a status updates it across all deals immediately. Order changes affect display only.
+      </div>
+    </div>
   </div>
+
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script>
+  const COLOR_DOTS = {
+    {% for c in COLOR_OPTIONS %}"{{ c }}": "{{ c | mw_dot }}"{% if not loop.last %},{% endif %}{% endfor %}
+  };
+  const COLOR_CHIPS = {
+    {% for c in COLOR_OPTIONS %}"{{ c }}": "{{ c | mw_chip }}"{% if not loop.last %},{% endif %}{% endfor %}
+  };
+
+  const CHIP_STYLES = {
+    green:  {bg:'#e8f2e6', border:'#cfe1c8', color:'#2a4838'},
+    amber:  {bg:'#faedd6', border:'#ebd4a8', color:'#a85a1c'},
+    gray:   {bg:'#fafaf6', border:'#e8e3d8', color:'#5b6b5e'},
+    blue:   {bg:'#e8eff5', border:'#cad9e7', color:'#3a5870'},
+    red:    {bg:'#faf1ec', border:'#e8d0c8', color:'#b8533a'},
+    purple: {bg:'#e8eff5', border:'#cad9e7', color:'#3a5870'},
+    orange: {bg:'#faedd6', border:'#ebd4a8', color:'#a85a1c'},
+  };
+
+  function updateChip(color) {
+    const dot = document.getElementById('chip-dot');
+    const chip = document.getElementById('chip-preview');
+    dot.style.background = COLOR_DOTS[color] || '#a4a895';
+    const s = CHIP_STYLES[color] || CHIP_STYLES.gray;
+    chip.style.background   = s.bg;
+    chip.style.borderColor  = s.border;
+    chip.style.color        = s.color;
+  }
+
+  function selectColor(mode, color, el) {
+    const grid = document.getElementById('colors-' + mode);
+    grid.querySelectorAll('.as-color').forEach(c => c.classList.remove('sel'));
+    if (el) el.classList.add('sel');
+    document.getElementById(mode + '-color').value = color;
+    updateChip(color);
+  }
+
   function openEdit(id, name, order, color) {
-    document.getElementById('edit_status_id').value = id;
-    document.getElementById('edit_name').value = name;
-    document.getElementById('edit_order').value = order;
-    document.getElementById('edit-card').classList.remove('hidden');
-    document.getElementById('create-card').classList.add('opacity-50','pointer-events-none');
-    selectColor('edit', color, null);
-    document.getElementById('edit-card').scrollIntoView({behavior:'smooth',block:'start'});
+    document.getElementById('edit-status-id').value = id;
+    document.getElementById('edit-name').value = name;
+    document.getElementById('edit-order').value = order;
+    document.getElementById('chip-text').textContent = name;
+
+    document.getElementById('create-form').style.display = 'none';
+    document.getElementById('edit-form').style.display   = '';
+    document.getElementById('form-icon').className  = 'fa-solid fa-pen';
+    document.getElementById('form-label').textContent = 'Edit status';
+    document.getElementById('cancel-edit-btn').style.display = '';
+
+    selectColor('edit', color, document.querySelector('#colors-edit [data-color="' + color + '"]'));
+    document.getElementById('form-card').scrollIntoView({behavior:'smooth', block:'start'});
   }
+
   function closeEdit() {
-    document.getElementById('edit-card').classList.add('hidden');
-    document.getElementById('create-card').classList.remove('opacity-50','pointer-events-none');
+    document.getElementById('create-form').style.display = '';
+    document.getElementById('edit-form').style.display   = 'none';
+    document.getElementById('form-icon').className  = 'fa-solid fa-plus';
+    document.getElementById('form-label').textContent = 'New status';
+    document.getElementById('cancel-edit-btn').style.display = 'none';
+    document.getElementById('chip-text').textContent = 'New status';
+    selectColor('create', 'gray', document.querySelector('#colors-create [data-color="gray"]'));
   }
-  function selectColor(mode, color, clickedEl) {
-    const grid = document.getElementById('color-grid-' + mode);
-    grid.querySelectorAll('[data-color]').forEach(el => {
-      el.classList.remove('ring-2','ring-offset-1','ring-blue-500','border-blue-300');
-    });
-    const target = clickedEl || grid.querySelector('[data-color="' + color + '"]');
-    if (target) target.classList.add('ring-2','ring-offset-1','ring-blue-500','border-blue-300');
-    grid.closest('form').querySelectorAll('input[name="color"]').forEach(r => {
-      r.checked = r.value === color;
+
+  // ── Drag-and-drop reorder ──────────────────────────────────────────────────
+  const list = document.getElementById('stages-list');
+  if (list) {
+    Sortable.create(list, {
+      handle: '.as-grip',
+      animation: 150,
+      ghostClass: 'sortable-ghost',
+      onEnd: function () {
+        const rows = list.querySelectorAll('.as-row[data-id]');
+        const payload = Array.from(rows).map((row, idx) => ({
+          id: parseInt(row.dataset.id),
+          order: idx + 1
+        }));
+        // Update order badges immediately
+        rows.forEach((row, idx) => {
+          const badge = row.querySelector('.as-order');
+          if (badge) badge.textContent = idx + 1;
+        });
+        fetch('{{ url_for("admin_statuses_reorder") }}', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+      }
     });
   }
 </script>

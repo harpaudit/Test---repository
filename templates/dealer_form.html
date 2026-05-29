@@ -1,192 +1,209 @@
 {% extends "base.html" %}
-
 {% block title %}{% if dealer %}Edit Dealer{% else %}New Dealer{% endif %} — MOSES CRM{% endblock %}
-{% block page_title %}{% if dealer %}Edit Dealer{% else %}New Dealer{% endif %}{% endblock %}
-{% block page_subtitle %}<p class="text-xs text-gray-500 mt-0.5">{% if dealer %}Editing: {{ dealer.name }}{% else %}Register a new dealer{% endif %}</p>{% endblock %}
-
-{% block header_actions %}
-<a href="{{ url_for('dealers_list') }}" class="btn-secondary text-xs">
-  <i class="fa-solid fa-arrow-left"></i> Back
-</a>
-{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl">
+<style>
+  .cf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  .cf-contact { display: grid; grid-template-columns: 1fr 1fr 1fr 28px; gap: 12px; align-items: end; padding: 14px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 10px; margin-bottom: 10px; }
+  .cf-contact:last-of-type { margin-bottom: 0; }
+  .cf-contact .del { width: 28px; height: 36px; display: flex; align-items: center; justify-content: center; color: var(--muted-2); cursor: pointer; border-radius: 6px; background: none; border: none; }
+  .cf-contact .del:hover { color: var(--red); background: #faf1ec; }
+
+  .cf-radio { display: flex; gap: 10px; }
+  .cf-radio label { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; flex: 1; font-size: 13px; color: var(--text); background: #fff; transition: border-color .15s, background .15s; }
+  .cf-radio label.active { border-color: var(--accent); background: #f0f4ec; color: var(--accent-deep); font-weight: 500; }
+  .cf-radio label .ring { width: 14px; height: 14px; border-radius: 999px; border: 2px solid var(--border); background: #fff; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .cf-radio label.active .ring::after { content: ''; display: block; width: 6px; height: 6px; border-radius: 999px; background: var(--accent); }
+
+  .cf-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 8px; padding: 16px 0; border-top: 1px solid var(--border); }
+</style>
+
+<!-- Breadcrumb -->
+<div class="mw-bread">
+  <a href="{{ url_for('dealers_list') }}">Dealers</a>
+  <span class="sep">/</span>
+  {% if dealer %}
+  <a href="{{ url_for('dealer_detail', dealer_id=dealer.id) }}">{{ dealer.name }}</a>
+  <span class="sep">/</span>
+  <span style="color:var(--text);">Edit</span>
+  {% else %}
+  <span style="color:var(--text);">New dealer</span>
+  {% endif %}
+</div>
+
+<div class="mw-page-head">
+  <div>
+    <div class="mw-h1">{% if dealer %}Edit dealer{% else %}New dealer{% endif %}</div>
+    <div class="mw-hsub">
+      {% if dealer %}Update information, contacts and portal credentials for <b style="color:var(--text);">{{ dealer.name }}</b>.
+      {% else %}Register a new installer in the system. Required fields are marked <span style="color:var(--red);">*</span>.{% endif %}
+    </div>
+  </div>
+</div>
+
+<div style="max-width:760px;">
   <form method="POST"
         action="{% if dealer %}{{ url_for('dealer_edit', dealer_id=dealer.id) }}{% else %}{{ url_for('dealer_new') }}{% endif %}">
 
-    {# ── Dealer Info ──────────────────────────────────────────────────────── #}
-    <div class="card p-6 space-y-5 mb-5">
-      <h3 class="text-sm font-bold text-gray-700 flex items-center gap-2">
-        <i class="fa-solid fa-address-book text-blue-500"></i> Dealer Information
-      </h3>
-
-      <div>
-        <label for="name" class="form-label">
-          Dealer Name <span class="text-red-500">*</span>
-        </label>
-        <input type="text" id="name" name="name" required
-               value="{{ dealer.name if dealer else '' }}"
-               placeholder="e.g. Solarmite, Gamma, OWE..."
-               class="form-input">
+    <!-- Dealer Info -->
+    <div class="mw-card">
+      <div class="mw-card-head">
+        <div class="mw-card-title"><i class="fa-solid fa-address-book"></i>Dealer information</div>
       </div>
 
-      <div>
-        <label for="description" class="form-label">Short Description</label>
-        <textarea id="description" name="description" rows="2"
-                  placeholder="Brief notes about this dealer..."
-                  class="form-input resize-none">{{ dealer.description if dealer else '' }}</textarea>
+      <div class="mw-field">
+        <label for="name" class="mw-form-lbl">Dealer name <span class="req">*</span></label>
+        <input type="text" id="name" name="name" required
+               value="{{ dealer.name if dealer else '' }}"
+               placeholder="e.g. Solarmite, Gamma, OWE…"
+               class="mw-input">
+      </div>
+
+      <div class="mw-field">
+        <label for="description" class="mw-form-lbl">Short description</label>
+        <textarea id="description" name="description" rows="3"
+                  placeholder="Brief notes about this dealer — payment cadence, region, tier…"
+                  class="mw-input mw-textarea">{{ dealer.description if dealer else '' }}</textarea>
       </div>
 
       {% if dealer %}
-      <div>
-        <label class="form-label">Dealer Status</label>
-        <div class="flex gap-3">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="radio" name="is_active" value="1"
-                   {% if dealer.is_active %}checked{% endif %}
-                   class="text-blue-600">
-            <span class="text-sm text-gray-700">Active</span>
+      <div class="mw-field" style="margin-bottom:0;">
+        <label class="mw-form-lbl">Dealer status</label>
+        <div class="cf-radio" id="status-radio">
+          <label id="lbl-active" class="{{ 'active' if dealer.is_active }}"
+                 onclick="setActive(true)">
+            <span class="ring"></span>Active
+            <span style="margin-left:auto;font-size:11px;color:var(--muted-2);font-weight:400;">Shown in deal dropdown</span>
           </label>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="radio" name="is_active" value="0"
-                   {% if not dealer.is_active %}checked{% endif %}
-                   class="text-blue-600">
-            <span class="text-sm text-gray-700">Inactive</span>
+          <label id="lbl-inactive" class="{{ 'active' if not dealer.is_active }}"
+                 onclick="setActive(false)">
+            <span class="ring"></span>Inactive
+            <span style="margin-left:auto;font-size:11px;color:var(--muted-2);font-weight:400;">Hidden but data preserved</span>
           </label>
         </div>
+        <input type="hidden" name="is_active" id="is_active_input"
+               value="{{ '1' if dealer.is_active else '0' }}">
       </div>
       {% endif %}
     </div>
 
-    {# ── Contacts ─────────────────────────────────────────────────────────── #}
-    <div class="card p-6 mb-5">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-sm font-bold text-gray-700 flex items-center gap-2">
-          <i class="fa-solid fa-users text-green-500"></i> Contacts
-        </h3>
-        <button type="button" onclick="addContact()"
-                class="btn-secondary text-xs py-1.5 px-3">
-          <i class="fa-solid fa-plus"></i> Add Contact
+    <!-- Contacts -->
+    <div class="mw-card">
+      <div class="mw-card-head">
+        <div class="mw-card-title"><i class="fa-solid fa-users"></i>Contacts</div>
+        <button type="button" onclick="addContact()" class="mw-btn sm">
+          <i class="fa-solid fa-plus"></i>Add contact
         </button>
       </div>
 
-      <div id="contacts-container" class="space-y-3">
+      <div id="contacts-container">
         {% if dealer and dealer.contacts %}
           {% for c in dealer.contacts %}
-          <div class="contact-row grid grid-cols-[1fr_1fr_1fr_auto] gap-3 items-start p-3 bg-gray-50 rounded-xl border border-gray-200">
+          <div class="cf-contact contact-row">
             <div>
-              <label class="form-label">Name <span class="text-red-500">*</span></label>
-              <input type="text" name="contact_name[]" required
-                     value="{{ c.name }}" placeholder="Full name"
-                     class="form-input">
+              <label class="mw-form-lbl">Name {% if loop.first %}<span class="req">*</span>{% endif %}</label>
+              <input type="text" name="contact_name[]" value="{{ c.name }}" placeholder="Full name" class="mw-input" style="background:#fff;">
             </div>
             <div>
-              <label class="form-label">Phone</label>
-              <input type="tel" name="contact_phone[]"
-                     value="{{ c.phone or '' }}" placeholder="+1 (555) 000-0000"
-                     class="form-input">
+              <label class="mw-form-lbl">Phone</label>
+              <input type="tel" name="contact_phone[]" value="{{ c.phone or '' }}" placeholder="+1 (555) 000-0000" class="mw-input mono" style="background:#fff;">
             </div>
             <div>
-              <label class="form-label">Email</label>
-              <input type="email" name="contact_email[]"
-                     value="{{ c.email or '' }}" placeholder="email@example.com"
-                     class="form-input">
+              <label class="mw-form-lbl">Email</label>
+              <input type="email" name="contact_email[]" value="{{ c.email or '' }}" placeholder="email@example.com" class="mw-input" style="background:#fff;">
             </div>
-            <div class="pt-6">
-              <button type="button" onclick="removeContact(this)"
-                      class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Remove">
-                <i class="fa-solid fa-trash text-sm"></i>
-              </button>
-            </div>
+            <button type="button" onclick="removeContact(this)" class="del" title="Remove">
+              <i class="fa-solid fa-trash" style="font-size:12px;"></i>
+            </button>
           </div>
           {% endfor %}
         {% else %}
-          {# Empty row to start #}
-          <div class="contact-row grid grid-cols-[1fr_1fr_1fr_auto] gap-3 items-start p-3 bg-gray-50 rounded-xl border border-gray-200">
+          <div class="cf-contact contact-row">
             <div>
-              <label class="form-label">Name <span class="text-red-500">*</span></label>
-              <input type="text" name="contact_name[]"
-                     placeholder="Full name" class="form-input">
+              <label class="mw-form-lbl">Name <span class="req">*</span></label>
+              <input type="text" name="contact_name[]" placeholder="Full name" class="mw-input" style="background:#fff;">
             </div>
             <div>
-              <label class="form-label">Phone</label>
-              <input type="tel" name="contact_phone[]"
-                     placeholder="+1 (555) 000-0000" class="form-input">
+              <label class="mw-form-lbl">Phone</label>
+              <input type="tel" name="contact_phone[]" placeholder="+1 (555) 000-0000" class="mw-input mono" style="background:#fff;">
             </div>
             <div>
-              <label class="form-label">Email</label>
-              <input type="email" name="contact_email[]"
-                     placeholder="email@example.com" class="form-input">
+              <label class="mw-form-lbl">Email</label>
+              <input type="email" name="contact_email[]" placeholder="email@example.com" class="mw-input" style="background:#fff;">
             </div>
-            <div class="pt-6">
-              <button type="button" onclick="removeContact(this)"
-                      class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Remove">
-                <i class="fa-solid fa-trash text-sm"></i>
-              </button>
-            </div>
+            <button type="button" onclick="removeContact(this)" class="del" title="Remove">
+              <i class="fa-solid fa-trash" style="font-size:12px;"></i>
+            </button>
           </div>
         {% endif %}
       </div>
 
-      <p class="text-xs text-gray-400 mt-3">
-        <i class="fa-solid fa-circle-info mr-1"></i>
-        Only contacts with a name will be saved. Empty rows are ignored.
-      </p>
+      <div class="mw-alert muted" style="margin-top:12px;">
+        <i class="fa-solid fa-circle-info"></i>
+        <div>Only contacts with a name will be saved. Empty rows are silently ignored.</div>
+      </div>
     </div>
 
-    {# ── Portal Access ────────────────────────────────────────────────────── #}
-    <div class="card p-6 mb-5 space-y-4">
-      <h3 class="text-sm font-bold text-gray-700 flex items-center gap-2">
-        <i class="fa-solid fa-globe text-indigo-500"></i> Portal Access
-      </h3>
+    <!-- Portal Access -->
+    <div class="mw-card">
+      <div class="mw-card-head">
+        <div class="mw-card-title"><i class="fa-solid fa-globe"></i>Portal access</div>
+      </div>
 
-      <div>
-        <label for="website" class="form-label">Website URL</label>
-        <div class="relative">
-          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-            <i class="fa-solid fa-link text-sm"></i>
-          </span>
+      <div class="mw-field">
+        <label for="website" class="mw-form-lbl">Website URL</label>
+        <div class="mw-input-wrap">
+          <i class="left fa-solid fa-link"></i>
           <input type="text" id="website" name="website"
                  value="{{ dealer.website if dealer else '' }}"
                  placeholder="https://portal.example.com"
-                 class="form-input pl-9">
+                 class="mw-input mono">
         </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label for="portal_username" class="form-label">Username</label>
-          <div class="relative">
-            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-              <i class="fa-solid fa-user text-sm"></i>
-            </span>
+      <div class="cf-grid">
+        <div class="mw-field" style="margin-bottom:0;">
+          <label for="portal_username" class="mw-form-lbl">Username</label>
+          <div class="mw-input-wrap">
+            <i class="left fa-solid fa-user"></i>
             <input type="text" id="portal_username" name="portal_username"
                    value="{{ dealer.portal_username if dealer else '' }}"
-                   placeholder="portal_user"
-                   class="form-input pl-9">
+                   placeholder="portal_user" class="mw-input mono">
           </div>
         </div>
-        <div>
-          <label for="portal_password" class="form-label">Password</label>
-          <div class="relative">
-            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-              <i class="fa-solid fa-key text-sm"></i>
-            </span>
+        <div class="mw-field" style="margin-bottom:0;">
+          <label for="portal_password" class="mw-form-lbl">Password</label>
+          <div class="mw-input-wrap">
+            <i class="left fa-solid fa-key"></i>
             <input type="text" id="portal_password" name="portal_password"
                    value="{{ dealer.portal_password if dealer else '' }}"
-                   placeholder="••••••••"
-                   class="form-input pl-9">
+                   placeholder="••••••••" class="mw-input mono">
           </div>
         </div>
+      </div>
+
+      <div style="margin-top:14px;font-size:11px;color:var(--muted-2);">
+        <i class="fa-solid fa-shield-halved" style="margin-right:5px;color:var(--accent);"></i>
+        Credentials are stored encrypted. Only admins can view or edit them.
       </div>
     </div>
 
-    <div class="flex items-center justify-end gap-3">
-      <a href="{{ url_for('dealers_list') }}" class="btn-secondary">Cancel</a>
-      <button type="submit" class="btn-primary px-6">
+    <!-- Actions -->
+    <div class="cf-actions">
+      {% if dealer and current_user.is_admin %}
+      <form method="POST" action="{{ url_for('dealer_delete', dealer_id=dealer.id) }}" style="margin:0;"
+            onsubmit="return confirm('Delete or deactivate dealer «{{ dealer.name }}»?')">
+        <button type="submit" class="mw-btn danger">
+          <i class="fa-solid fa-trash"></i>Delete dealer
+        </button>
+      </form>
+      {% endif %}
+      <div style="flex:1;"></div>
+      <a href="{% if dealer %}{{ url_for('dealer_detail', dealer_id=dealer.id) }}{% else %}{{ url_for('dealers_list') }}{% endif %}" class="mw-btn">Cancel</a>
+      <button type="submit" class="mw-btn accent">
         <i class="fa-solid fa-{% if dealer %}floppy-disk{% else %}plus{% endif %}"></i>
-        {% if dealer %}Save Changes{% else %}Create Dealer{% endif %}
+        {% if dealer %}Save changes{% else %}Create dealer{% endif %}
       </button>
     </div>
 
@@ -196,28 +213,30 @@
 
 {% block scripts %}
 <script>
+  function setActive(isActive) {
+    document.getElementById('is_active_input').value = isActive ? '1' : '0';
+    document.getElementById('lbl-active').classList.toggle('active', isActive);
+    document.getElementById('lbl-inactive').classList.toggle('active', !isActive);
+  }
+
   function contactRowHTML() {
-    return `
-      <div class="contact-row grid grid-cols-[1fr_1fr_1fr_auto] gap-3 items-start p-3 bg-gray-50 rounded-xl border border-gray-200">
-        <div>
-          <label class="form-label">Name <span class="text-red-500">*</span></label>
-          <input type="text" name="contact_name[]" placeholder="Full name" class="form-input">
-        </div>
-        <div>
-          <label class="form-label">Phone</label>
-          <input type="tel" name="contact_phone[]" placeholder="+1 (555) 000-0000" class="form-input">
-        </div>
-        <div>
-          <label class="form-label">Email</label>
-          <input type="email" name="contact_email[]" placeholder="email@example.com" class="form-input">
-        </div>
-        <div class="pt-6">
-          <button type="button" onclick="removeContact(this)"
-                  class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Remove">
-            <i class="fa-solid fa-trash text-sm"></i>
-          </button>
-        </div>
-      </div>`;
+    return `<div class="cf-contact contact-row">
+      <div>
+        <label class="mw-form-lbl">Name</label>
+        <input type="text" name="contact_name[]" placeholder="Full name" class="mw-input" style="background:#fff;">
+      </div>
+      <div>
+        <label class="mw-form-lbl">Phone</label>
+        <input type="tel" name="contact_phone[]" placeholder="+1 (555) 000-0000" class="mw-input mono" style="background:#fff;">
+      </div>
+      <div>
+        <label class="mw-form-lbl">Email</label>
+        <input type="email" name="contact_email[]" placeholder="email@example.com" class="mw-input" style="background:#fff;">
+      </div>
+      <button type="button" onclick="removeContact(this)" class="del" title="Remove">
+        <i class="fa-solid fa-trash" style="font-size:12px;"></i>
+      </button>
+    </div>`;
   }
 
   function addContact() {

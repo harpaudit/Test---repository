@@ -1,124 +1,147 @@
 {% extends "base.html" %}
-
 {% block title %}Dealers — MOSES CRM{% endblock %}
-{% block page_title %}Dealers{% endblock %}
-{% block page_subtitle %}<p class="text-xs text-gray-500 mt-0.5">Dealer directory &amp; contact book</p>{% endblock %}
-
-{% block header_actions %}
-{% if current_user.is_admin %}
-<a href="{{ url_for('dealer_new') }}" class="btn-primary text-xs">
-  <i class="fa-solid fa-plus"></i> New Dealer
-</a>
-{% endif %}
-{% endblock %}
 
 {% block content %}
-<div class="card overflow-hidden">
-  <div class="px-5 py-4 border-b border-gray-100">
-    <h2 class="text-sm font-semibold text-gray-700">{{ dealers | length }} dealer(s) registered</h2>
-  </div>
+<style>
+  .dl-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .dl-stile { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .dl-stile .lbl { font-size: 11px; color: var(--muted); }
+  .dl-stile .val { font-size: 22px; font-weight: 600; color: var(--text); margin-top: 4px; letter-spacing: -.015em; font-feature-settings: 'lnum','tnum'; }
 
-  {% if dealers %}
-  <div class="overflow-x-auto">
-    <table class="w-full">
-      <thead>
-        <tr class="bg-gray-50 text-left border-b border-gray-100">
-          <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-          <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Contacts</th>
-          <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Website</th>
-          <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Portal User</th>
-          <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Deals</th>
-          <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Status</th>
-          {% if current_user.is_admin %}
-          <th class="px-5 py-3"></th>
-          {% endif %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for d in dealers %}
-        <tr class="table-row">
-          <td class="px-5 py-3.5">
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <span class="text-blue-700 font-bold text-sm">{{ d.name[0].upper() }}</span>
-              </div>
-              <a href="{{ url_for('dealer_detail', dealer_id=d.id) }}"
-                 class="font-semibold text-sm text-gray-800 hover:text-blue-600 transition-colors">
-                {{ d.name }}
-              </a>
-            </div>
-          </td>
-          <td class="px-5 py-3.5">
-            {% if d.contacts %}
-            <div class="space-y-1">
-              {% for c in d.contacts %}
-              <div class="text-xs text-gray-700 font-medium">{{ c.name }}
-                {% if c.phone %}<span class="text-gray-400 font-normal ml-1">{{ c.phone }}</span>{% endif %}
-                {% if c.email %}<span class="text-gray-400 font-normal ml-1">{{ c.email }}</span>{% endif %}
-              </div>
-              {% endfor %}
-            </div>
-            {% else %}
-            <span class="text-xs text-gray-400">—</span>
-            {% endif %}
-          </td>
-          <td class="px-5 py-3.5 text-sm text-gray-600">
-            {% if d.website %}
-            <a href="{{ d.website }}" target="_blank" rel="noopener"
-               class="text-blue-600 hover:underline text-xs truncate max-w-[160px] inline-block">
-              {{ d.website }}
-            </a>
-            {% else %}—{% endif %}
-          </td>
-          <td class="px-5 py-3.5 text-sm text-gray-600 text-xs">{{ d.portal_username or '—' }}</td>
-          <td class="px-5 py-3.5 text-center font-bold text-gray-800">{{ d.deals | length }}</td>
-          <td class="px-5 py-3.5 text-center">
-            {% if d.is_active %}
-            <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 border border-green-200 rounded-full text-xs font-semibold">
-              <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Active
-            </span>
-            {% else %}
-            <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-500 border border-gray-200 rounded-full text-xs font-semibold">
-              <span class="w-1.5 h-1.5 bg-gray-400 rounded-full"></span> Inactive
-            </span>
-            {% endif %}
-          </td>
-          {% if current_user.is_admin %}
-          <td class="px-5 py-3.5">
-            <div class="flex items-center justify-end gap-1">
-              <a href="{{ url_for('dealer_detail', dealer_id=d.id) }}"
-                 class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View">
-                <i class="fa-solid fa-eye text-sm"></i>
-              </a>
-              <a href="{{ url_for('dealer_edit', dealer_id=d.id) }}"
-                 class="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Edit">
-                <i class="fa-solid fa-pen text-sm"></i>
-              </a>
-              <form method="POST" action="{{ url_for('dealer_delete', dealer_id=d.id) }}"
-                    onsubmit="return confirm('Delete or deactivate dealer «{{ d.name }}»?')">
-                <button type="submit"
-                        class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
-                  <i class="fa-solid fa-trash text-sm"></i>
-                </button>
-              </form>
-            </div>
-          </td>
-          {% endif %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  .dl-filters { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+
+  .dl-row { display: grid; grid-template-columns: 36px 1fr 1.2fr 1fr 0.8fr 0.5fr 0.6fr auto; gap: 14px; align-items: center; padding: 14px; border-bottom: 1px solid var(--border-soft); }
+  .dl-row:last-child { border-bottom: none; }
+  .dl-row:hover { background: var(--surface-2); }
+  .dl-row .name { font-size: 13px; font-weight: 600; color: var(--text); text-decoration: none; }
+  .dl-row .name:hover { color: var(--accent); }
+  .dl-row .sub  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .dl-row .web  { font-size: 12px; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dl-row .user { font-size: 12px; color: var(--text-2); font-feature-settings: 'tnum'; }
+  .dl-row .num  { font-size: 14px; font-weight: 600; text-align: right; font-feature-settings: 'lnum','tnum'; }
+  .dl-row .acts { display: flex; gap: 2px; justify-content: flex-end; }
+  .dl-row .acts a, .dl-row .acts button { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--muted-2); cursor: pointer; background: transparent; border: none; font-size: 12px; text-decoration: none; transition: background .12s, color .12s; }
+  .dl-row .acts a:hover, .dl-row .acts button:hover { background: var(--border-soft); color: var(--text); }
+  .dl-row .acts .del:hover { color: var(--red); background: #faf1ec; }
+
+  .dl-th { display: grid; grid-template-columns: 36px 1fr 1.2fr 1fr 0.8fr 0.5fr 0.6fr auto; gap: 14px; padding: 12px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .dl-th .right { text-align: right; }
+</style>
+
+<div class="mw-page-head">
+  <div>
+    <div class="mw-h1">Dealers</div>
+    <div class="mw-hsub">Directory of installer companies, their contacts, and portal credentials.</div>
   </div>
-  {% else %}
-  <div class="flex flex-col items-center justify-center py-16 text-gray-400">
-    <i class="fa-solid fa-address-book text-4xl mb-3"></i>
-    <p class="text-sm font-medium">No dealers registered yet</p>
+  <div style="display:flex;gap:8px;">
+    <a href="{{ url_for('export_excel') }}" class="mw-btn">
+      <i class="fa-solid fa-file-excel" style="color:#16a34a;"></i>Export
+    </a>
     {% if current_user.is_admin %}
-    <a href="{{ url_for('dealer_new') }}" class="btn-primary mt-4 text-xs">
-      <i class="fa-solid fa-plus"></i> Add first dealer
+    <a href="{{ url_for('dealer_new') }}" class="mw-btn primary">
+      <i class="fa-solid fa-plus"></i>New dealer
     </a>
     {% endif %}
   </div>
-  {% endif %}
 </div>
+
+<!-- Summary tiles -->
+{% set active_dealers = dealers | selectattr('is_active') | list %}
+{% set total_deals_count = namespace(v=0) %}
+{% for d in dealers %}{% set total_deals_count.v = total_deals_count.v + (d.deals | length) %}{% endfor %}
+<div class="dl-summary">
+  <div class="dl-stile">
+    <div class="lbl">Active dealers</div>
+    <div class="val">{{ active_dealers | length }}</div>
+  </div>
+  <div class="dl-stile">
+    <div class="lbl">Total dealers</div>
+    <div class="val">{{ dealers | length }}</div>
+  </div>
+  <div class="dl-stile">
+    <div class="lbl">Total deals</div>
+    <div class="val">{{ total_deals_count.v }}</div>
+  </div>
+  <div class="dl-stile">
+    <div class="lbl">Status</div>
+    <div class="val" style="font-size:14px;color:var(--accent);">{{ active_dealers | length }} active</div>
+  </div>
+</div>
+
+<!-- Table -->
+{% if dealers %}
+<div class="mw-table-card">
+  <div class="dl-th">
+    <div></div>
+    <div>Dealer</div>
+    <div>Contacts</div>
+    <div>Website</div>
+    <div>Portal user</div>
+    <div class="right">Deals</div>
+    <div>Status</div>
+    <div></div>
+  </div>
+
+  {% for d in dealers %}
+  <div class="dl-row">
+    <div class="mw-initial">{{ d.name[0].upper() }}</div>
+    <div>
+      <a href="{{ url_for('dealer_detail', dealer_id=d.id) }}" class="name">{{ d.name }}</a>
+      {% if d.description %}
+      <div class="sub">{{ d.description[:60] }}{% if d.description | length > 60 %}…{% endif %}</div>
+      {% endif %}
+    </div>
+    <div>
+      {% if d.contacts %}
+        <div style="font-size:12px;color:var(--text-2);">{{ d.contacts[0].name }}</div>
+        {% if d.contacts | length > 1 %}
+        <div class="sub">+ {{ d.contacts | length - 1 }} more</div>
+        {% endif %}
+      {% else %}
+        <span style="font-size:12px;color:var(--muted-2);">—</span>
+      {% endif %}
+    </div>
+    <div class="web" title="{{ d.website or '' }}">{{ d.website or '—' }}</div>
+    <div class="user mono">{{ d.portal_username or '—' }}</div>
+    <div class="num">{{ d.deals | length }}</div>
+    <div>
+      {% if d.is_active %}
+      <span class="mw-chip green"><span class="dot"></span>Active</span>
+      {% else %}
+      <span class="mw-chip gray"><span class="dot"></span>Inactive</span>
+      {% endif %}
+    </div>
+    <div class="acts">
+      <a href="{{ url_for('dealer_detail', dealer_id=d.id) }}" title="View">
+        <i class="fa-solid fa-eye"></i>
+      </a>
+      {% if current_user.is_admin %}
+      <a href="{{ url_for('dealer_edit', dealer_id=d.id) }}" title="Edit">
+        <i class="fa-solid fa-pen"></i>
+      </a>
+      <form method="POST" action="{{ url_for('dealer_delete', dealer_id=d.id) }}"
+            onsubmit="return confirm('Delete or deactivate dealer «{{ d.name }}»?')" style="margin:0;">
+        <button type="submit" class="del" title="Delete">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="mw-table-card">
+  <div class="mw-empty">
+    <i class="fa-solid fa-address-book"></i>
+    <div class="title">No dealers registered</div>
+    <div class="sub">Add your first dealer to get started.</div>
+    {% if current_user.is_admin %}
+    <a href="{{ url_for('dealer_new') }}" class="mw-btn primary" style="margin-top:16px;">
+      <i class="fa-solid fa-plus"></i>New dealer
+    </a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 {% endblock %}

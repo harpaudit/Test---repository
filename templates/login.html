@@ -4,84 +4,223 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign In — MOSES CRM</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; }
+
+    .lC {
+      height: 100vh; display: flex; align-items: stretch;
+      color: #1a1f1a; background: #f6f4ef;
+    }
+
+    /* LEFT — marketing panel */
+    .lC-left {
+      flex: 1.05;
+      background:
+        radial-gradient(ellipse at top right, #c6d5be 0%, transparent 60%),
+        radial-gradient(ellipse at bottom left, #e7e1cd 0%, transparent 60%),
+        #eef0e6;
+      padding: 48px 44px;
+      display: flex; flex-direction: column; justify-content: space-between;
+      position: relative; overflow: hidden;
+    }
+    .lC-logo { display: flex; align-items: center; gap: 10px; }
+    .lC-logo-mark {
+      width: 32px; height: 32px; border-radius: 9px;
+      background: linear-gradient(155deg,#3f6651,#2a4838);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 700; font-size: 14px;
+    }
+    .lC-logo-name { font-size: 16px; font-weight: 600; color: #1a1f1a; }
+    .lC-logo-name span { color: #5b6b5e; font-weight: 400; }
+
+    .lC-hero { max-width: 460px; }
+    .lC-hero h1 {
+      font-size: 36px; line-height: 1.15; letter-spacing: -.025em;
+      font-weight: 600; color: #1a1f1a;
+    }
+    .lC-hero p { font-size: 14px; color: #5b6b5e; margin-top: 12px; line-height: 1.55; }
+    .lC-bullets { margin-top: 26px; display: flex; flex-direction: column; gap: 10px; }
+    .lC-bullet { display: flex; gap: 11px; align-items: center; font-size: 13px; color: #3a4a3e; }
+    .lC-bullet .tick {
+      width: 18px; height: 18px; border-radius: 999px; background: #3f6651;
+      color: #fff; font-size: 9px; display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0;
+    }
+
+    .lC-card-preview {
+      background: rgba(255,255,255,.72); border: 1px solid #d8d4c4;
+      border-radius: 14px; padding: 18px 20px;
+      backdrop-filter: blur(8px); max-width: 380px;
+    }
+    .lC-card-preview .row {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px; color: #5b6b5e;
+    }
+    .lC-card-preview .row + .row { margin-top: 8px; }
+    .lC-card-preview .row b { color: #1a1f1a; font-weight: 600; }
+    .lC-card-preview .num {
+      font-size: 28px; font-weight: 600; color: #1a1f1a;
+      letter-spacing: -.02em; margin-top: 8px;
+      font-feature-settings: 'lnum','tnum';
+    }
+    .lC-card-preview .foot {
+      display: flex; gap: 12px; align-items: center;
+      font-size: 12px; color: #5b6b5e; margin-top: 14px; flex-wrap: wrap;
+    }
+    .lC-card-preview .foot .sep { color: #c8c6b5; }
+
+    /* RIGHT — form */
+    .lC-right {
+      flex: 1; background: #fff; padding: 56px;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    .lC-wrap { max-width: 360px; width: 100%; margin: 0 auto; }
+    .lC-h1 { font-size: 26px; font-weight: 600; color: #1a1f1a; letter-spacing: -.02em; }
+    .lC-hsub { font-size: 13px; color: #5b6b5e; margin-top: 6px; margin-bottom: 30px; }
+
+    .lC-field { margin-bottom: 18px; }
+    .lC-label { font-size: 12px; font-weight: 500; color: #3a4a3e; margin-bottom: 6px; display: block; }
+    .lC-input {
+      width: 100%; background: #fafaf6; border: 1px solid #e8e3d8;
+      border-radius: 10px; padding: 12px 14px; font-size: 14px;
+      color: #1a1f1a; font-family: 'Inter', sans-serif; box-sizing: border-box;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .lC-input:focus {
+      outline: none; border-color: #3f6651; background: #fff;
+      box-shadow: 0 0 0 3px rgba(63,102,81,.15);
+    }
+    .lC-input-wrap { position: relative; }
+    .lC-input-wrap .lC-input { padding-right: 40px; }
+    .lC-input-wrap .toggle {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: #8a8a7e; cursor: pointer;
+      font-size: 13px; padding: 0;
+    }
+    .lC-input-wrap .toggle:hover { color: #1a1f1a; }
+
+    .lC-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 22px; font-size: 12px; color: #5b6b5e;
+    }
+    .lC-btn {
+      width: 100%; padding: 12px; background: #1a1f1a; color: #fff;
+      border: none; border-radius: 10px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: background .15s; font-family: 'Inter', sans-serif;
+    }
+    .lC-btn:hover { background: #2a3024; }
+
+    .lC-flash {
+      padding: 10px 14px; border-radius: 10px; font-size: 12px;
+      border: 1px solid #e8d0c8; background: #faf1ec; color: #b8533a;
+      display: flex; gap: 8px; align-items: flex-start; margin-bottom: 20px;
+    }
+
+    .lC-foot { margin-top: 28px; text-align: center; font-size: 11px; color: #a4a895; }
+
+    @media (max-width: 768px) {
+      .lC { flex-direction: column; }
+      .lC-left { display: none; }
+      .lC-right { padding: 40px 28px; }
+    }
+  </style>
 </head>
-<body class="bg-slate-900 min-h-screen flex items-center justify-center p-4">
-  <div class="w-full max-w-sm">
-    <div class="text-center mb-8">
-      <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-900/50">
-        <span class="text-white font-black text-3xl">M</span>
-      </div>
-      <h1 class="text-2xl font-bold text-white">MOSES CRM</h1>
-      <p class="text-slate-400 text-sm mt-1">Solar Pipeline Management</p>
+<body>
+<div class="lC">
+
+  <!-- LEFT -->
+  <div class="lC-left">
+    <div class="lC-logo">
+      <div class="lC-logo-mark">M</div>
+      <div class="lC-logo-name">Moses <span>· Solar Pipeline</span></div>
     </div>
 
-    <div class="bg-white rounded-2xl shadow-2xl p-8">
-      <h2 class="text-lg font-semibold text-gray-800 mb-1">Welcome back</h2>
-      <p class="text-sm text-gray-500 mb-6">Enter your credentials to continue.</p>
+    <div class="lC-hero">
+      <h1>Run your solar pipeline like a calm afternoon.</h1>
+      <p>One workspace for every deal, dealer, payment, and commission — designed to read clearly and stay out of your way.</p>
+      <div class="lC-bullets">
+        <div class="lC-bullet"><span class="tick">✓</span>Track every deal from lead to install</div>
+        <div class="lC-bullet"><span class="tick">✓</span>Automatic commission math (Redline + Net PPW)</div>
+        <div class="lC-bullet"><span class="tick">✓</span>Excel export, status history, payment ledger</div>
+      </div>
+    </div>
+
+    <div class="lC-card-preview">
+      <div class="row"><span>Active pipeline</span></div>
+      <div class="num">{{ login_pipeline | currency }}</div>
+      <div class="foot">
+        <span>{{ login_deals }} deal{{ 's' if login_deals != 1 }}</span>
+        <span class="sep">·</span>
+        <span>{{ login_dealers }} dealer{{ 's' if login_dealers != 1 }}</span>
+        <span class="sep">·</span>
+        <span style="color:#3f6651; font-weight:600;">{{ login_collected | currency }} collected</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="lC-right">
+    <div class="lC-wrap">
+      <h1 class="lC-h1">Sign in</h1>
+      <div class="lC-hsub">Welcome back. Pick up where you left off.</div>
 
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% for category, message in messages %}
-        <div class="mb-4 px-4 py-3 rounded-lg text-sm
-          {% if category == 'error' %}bg-red-50 text-red-700 border border-red-200
-          {% elif category == 'warning' %}bg-yellow-50 text-yellow-700 border border-yellow-200
-          {% else %}bg-blue-50 text-blue-700 border border-blue-200{% endif %}">
-          <i class="fa-solid fa-circle-info mr-1"></i> {{ message }}
+        <div class="lC-flash">
+          <i class="fa-solid fa-circle-xmark" style="margin-top:1px; flex-shrink:0;"></i>
+          <div>{{ message }}</div>
         </div>
         {% endfor %}
       {% endwith %}
 
       <form method="POST" action="{{ url_for('login') }}" autocomplete="on">
-        <div class="mb-4">
-          <label for="email" class="block text-sm font-semibold text-gray-700 mb-1.5">Email address</label>
-          <div class="relative">
-            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-              <i class="fa-solid fa-envelope text-sm"></i>
-            </span>
-            <input id="email" name="email" type="email" required autocomplete="email"
-                   value="{{ request.form.get('email', '') }}"
-                   placeholder="user@company.com"
-                   class="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
-          </div>
+        <div class="lC-field">
+          <label for="email" class="lC-label">Email</label>
+          <input id="email" name="email" type="email" required autocomplete="email"
+                 class="lC-input" placeholder="you@company.com"
+                 value="{{ request.form.get('email', '') }}">
         </div>
 
-        <div class="mb-6">
-          <label for="password" class="block text-sm font-semibold text-gray-700 mb-1.5">Password</label>
-          <div class="relative">
-            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-              <i class="fa-solid fa-lock text-sm"></i>
-            </span>
-            <input id="password" name="password" type="password" required autocomplete="current-password"
-                   placeholder="••••••••"
-                   class="w-full pl-9 pr-10 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
-            <button type="button" onclick="togglePwd()" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600">
-              <i id="pwd-icon" class="fa-solid fa-eye text-sm"></i>
+        <div class="lC-field">
+          <label for="password" class="lC-label">Password</label>
+          <div class="lC-input-wrap">
+            <input id="password" name="password" type="password" required
+                   autocomplete="current-password" class="lC-input" placeholder="••••••••">
+            <button type="button" class="toggle" onclick="togglePwd()" tabindex="-1">
+              <i id="pwd-icon" class="fa-solid fa-eye"></i>
             </button>
           </div>
         </div>
 
-        <button type="submit"
-                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors shadow-sm">
-          <i class="fa-solid fa-right-to-bracket mr-2"></i>Sign in
-        </button>
-      </form>
-    </div>
+        <div class="lC-row">
+          <span style="color:#8a8a7e;">HARP Audit internal tool</span>
+        </div>
 
-    <p class="text-center text-slate-500 text-xs mt-6">HARP Audit &mdash; MOSES Solar CRM</p>
+        <button type="submit" class="lC-btn">Sign in</button>
+      </form>
+
+      <div class="lC-foot">MOSES CRM · Solar Pipeline Management</div>
+    </div>
   </div>
-  <script>
-    function togglePwd() {
-      const input = document.getElementById('password');
-      const icon  = document.getElementById('pwd-icon');
-      if (input.type === 'password') {
-        input.type = 'text';
-        icon.classList.replace('fa-eye', 'fa-eye-slash');
-      } else {
-        input.type = 'password';
-        icon.classList.replace('fa-eye-slash', 'fa-eye');
-      }
+
+</div>
+<script>
+  function togglePwd() {
+    const input = document.getElementById('password');
+    const icon  = document.getElementById('pwd-icon');
+    if (input.type === 'password') {
+      input.type = 'text';
+      icon.classList.replace('fa-eye','fa-eye-slash');
+    } else {
+      input.type = 'password';
+      icon.classList.replace('fa-eye-slash','fa-eye');
     }
-  </script>
+  }
+</script>
 </body>
 </html>

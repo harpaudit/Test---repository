@@ -1,359 +1,326 @@
 {% extends "base.html" %}
-
 {% block title %}{{ dealer.name }} — MOSES CRM{% endblock %}
-{% block page_title %}{{ dealer.name }}{% endblock %}
-{% block page_subtitle %}
-<p class="text-xs text-gray-500 mt-0.5">
-  Dealer detail &bull;
-  {% if dealer.is_active %}
-  <span class="text-green-600 font-semibold">Active</span>
-  {% else %}
-  <span class="text-gray-400 font-semibold">Inactive</span>
-  {% endif %}
-</p>
-{% endblock %}
-
-{% block header_actions %}
-<a href="{{ url_for('dealers_list') }}" class="btn-secondary text-xs">
-  <i class="fa-solid fa-arrow-left"></i> Dealers
-</a>
-{% if current_user.is_admin %}
-<a href="{{ url_for('dealer_edit', dealer_id=dealer.id) }}" class="btn-primary text-xs">
-  <i class="fa-solid fa-pen"></i> Edit
-</a>
-{% endif %}
-{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<style>
+  .mw-dd-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 20px; align-items: start; }
 
-  {# ── Top: Dealer info ─────────────────────────────────────────────────── #}
-  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+  .mw-dd-hero { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 24px 26px; margin-bottom: 16px; display: grid; grid-template-columns: 56px 1fr auto; gap: 18px; align-items: flex-start; }
+  .mw-dd-logo { width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(155deg,#e8f0ec,#c6d5be); color: var(--accent-deep); font-weight: 700; font-size: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .mw-dd-title { font-size: 24px; font-weight: 600; color: var(--text); letter-spacing: -.02em; line-height: 1.1; }
+  .mw-dd-meta  { display: flex; gap: 12px; align-items: center; font-size: 13px; color: var(--muted); margin-top: 6px; flex-wrap: wrap; }
+  .mw-dd-desc  { margin-top: 12px; font-size: 13px; color: var(--text-2); line-height: 1.55; }
 
-    {# Contacts #}
-    <div class="card p-6 xl:col-span-2">
-      <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
-        <i class="fa-solid fa-users text-green-500"></i> Contacts
-      </h3>
+  .mw-dd-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .mw-dd-stat  { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .mw-dd-stat .lbl { font-size: 11px; color: var(--muted); }
+  .mw-dd-stat .val { font-size: 20px; font-weight: 600; color: var(--text); margin-top: 3px; letter-spacing: -.01em; font-feature-settings: 'lnum','tnum'; }
+  .mw-dd-stat.accent .val { color: var(--accent); }
+  .mw-dd-stat.amber  .val { color: var(--amber); }
 
-      {% if dealer.description %}
-      <p class="text-sm text-gray-600 mb-4 leading-relaxed italic border-l-4 border-gray-200 pl-3">
-        {{ dealer.description }}
-      </p>
-      {% endif %}
+  .mw-dd-contact { display: grid; grid-template-columns: 36px 1fr auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-soft); }
+  .mw-dd-contact:last-child { border-bottom: none; }
+  .mw-dd-contact .nm   { font-size: 13px; font-weight: 500; color: var(--text); }
+  .mw-dd-contact .role { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .mw-dd-contact .meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; color: var(--text-2); }
+  .mw-dd-contact .meta .em { color: var(--accent); }
 
-      {% if dealer.contacts %}
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="bg-gray-50 text-left">
-              <th class="px-3 py-2 text-xs font-semibold text-gray-500 rounded-tl-lg">Name</th>
-              <th class="px-3 py-2 text-xs font-semibold text-gray-500">Phone</th>
-              <th class="px-3 py-2 text-xs font-semibold text-gray-500 rounded-tr-lg">Email</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for c in dealer.contacts %}
-            <tr class="border-t border-gray-100">
-              <td class="px-3 py-2.5 font-medium text-gray-800 text-sm">{{ c.name }}</td>
-              <td class="px-3 py-2.5 text-sm text-gray-600">
-                {% if c.phone %}
-                <a href="tel:{{ c.phone }}" class="text-blue-600 hover:underline">{{ c.phone }}</a>
-                {% else %}—{% endif %}
-              </td>
-              <td class="px-3 py-2.5 text-sm text-gray-600">
-                {% if c.email %}
-                <a href="mailto:{{ c.email }}" class="text-blue-600 hover:underline">{{ c.email }}</a>
-                {% else %}—{% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+  .mw-dd-port { padding: 10px 0; border-bottom: 1px solid var(--border-soft); display: grid; grid-template-columns: 90px 1fr auto; gap: 14px; align-items: center; }
+  .mw-dd-port:last-child { border-bottom: none; }
+  .mw-dd-port .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 500; }
+  .mw-dd-port .v { font-size: 13px; color: var(--text); word-break: break-all; }
+  .mw-dd-port .v.link { color: var(--accent); }
+  .mw-dd-port .copy { color: var(--muted-2); cursor: pointer; font-size: 12px; padding: 5px; border-radius: 6px; background: none; border: none; }
+  .mw-dd-port .copy:hover { color: var(--text); background: var(--border-soft); }
+
+  .mw-dd-call { padding: 14px; border-radius: 10px; border: 1px solid var(--border-soft); background: var(--surface-2); margin-bottom: 10px; }
+  .mw-dd-call:last-child { margin-bottom: 0; }
+  .mw-dd-call .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .mw-dd-call .head .date { font-size: 12px; color: var(--text); font-weight: 500; }
+  .mw-dd-call .head .author { font-size: 11px; color: var(--muted); }
+  .mw-dd-call .body { font-size: 12px; color: var(--text-2); line-height: 1.5; }
+
+  .mw-dd-call-form { padding: 14px; background: var(--surface-2); border: 1px dashed var(--border); border-radius: 10px; margin-bottom: 14px; }
+</style>
+
+<!-- Breadcrumb -->
+<div class="mw-bread">
+  <a href="{{ url_for('dealers_list') }}">Dealers</a>
+  <span class="sep">/</span>
+  <span style="color:var(--text);">{{ dealer.name }}</span>
+</div>
+
+<!-- HERO -->
+<div class="mw-dd-hero">
+  <div class="mw-dd-logo">{{ dealer.name[0].upper() }}</div>
+  <div>
+    <div class="mw-dd-title">{{ dealer.name }}</div>
+    <div class="mw-dd-meta">
+      {% if dealer.is_active %}
+      <span class="mw-chip green"><span class="dot"></span>Active</span>
       {% else %}
-      <p class="text-sm text-gray-400 italic">No contacts registered for this dealer.</p>
+      <span class="mw-chip gray"><span class="dot"></span>Inactive</span>
       {% endif %}
-    </div>
-
-    {# Portal Access #}
-    <div class="card p-6">
-      <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
-        <i class="fa-solid fa-globe text-indigo-500"></i> Portal Access
-      </h3>
-      <div class="space-y-3">
-        <div>
-          <p class="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Website</p>
-          {% if dealer.website %}
-          <a href="{{ dealer.website }}" target="_blank" rel="noopener"
-             class="text-sm text-blue-600 hover:underline break-all">
-            {{ dealer.website }}
-          </a>
-          {% else %}
-          <p class="text-sm text-gray-400">—</p>
-          {% endif %}
-        </div>
-        <div>
-          <p class="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Username</p>
-          <p class="text-sm text-gray-700 font-mono">{{ dealer.portal_username or '—' }}</p>
-        </div>
-        <div>
-          <p class="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Password</p>
-          {% if dealer.portal_password %}
-          <div class="flex items-center gap-2">
-            <span id="pwd-display" class="text-sm text-gray-700 font-mono">••••••••</span>
-            <button type="button" onclick="togglePwd('{{ dealer.portal_password }}')"
-                    class="text-xs text-blue-500 hover:text-blue-700 transition-colors">
-              <i id="pwd-icon" class="fa-solid fa-eye"></i>
-            </button>
-          </div>
-          {% else %}
-          <p class="text-sm text-gray-400">—</p>
-          {% endif %}
-        </div>
-      </div>
-
-      {# Quick stats #}
-      <div class="mt-5 pt-5 border-t border-gray-100 grid grid-cols-2 gap-3">
-        <div class="text-center p-3 bg-gray-50 rounded-xl">
-          <p class="text-xs text-gray-500 mb-1">Total Deals</p>
-          <p class="text-2xl font-black text-gray-800">{{ deals | length }}</p>
-        </div>
-        <div class="text-center p-3 bg-green-50 rounded-xl">
-          <p class="text-xs text-green-600 mb-1">Collected</p>
-          <p class="text-xl font-black text-green-700">
-            {{ (deals | sum(attribute='amount_paid') or 0) | currency }}
-          </p>
-        </div>
-      </div>
+      {% if dealer.description %}
+      <div class="mw-dd-desc">{{ dealer.description }}</div>
+      {% endif %}
     </div>
   </div>
+  <div style="display:flex;gap:8px;flex-shrink:0;">
+    <a href="{{ url_for('dealers_list') }}" class="mw-btn">
+      <i class="fa-solid fa-arrow-left"></i>Dealers
+    </a>
+    {% if current_user.is_admin %}
+    <a href="{{ url_for('dealer_edit', dealer_id=dealer.id) }}" class="mw-btn primary">
+      <i class="fa-solid fa-pen"></i>Edit
+    </a>
+    {% endif %}
+  </div>
+</div>
 
-  {# ── Deals Table ──────────────────────────────────────────────────────── #}
-  <div class="card overflow-hidden">
-    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-      <h3 class="text-sm font-bold text-gray-700 flex items-center gap-2">
-        <i class="fa-solid fa-handshake text-blue-500"></i>
-        Associated Deals ({{ deals | length }})
-      </h3>
-      {% if current_user.is_admin %}
-      <a href="{{ url_for('deal_new') }}" class="btn-primary text-xs">
-        <i class="fa-solid fa-plus"></i> New Deal
-      </a>
+<!-- STATS -->
+{% set _pipeline = namespace(v=0) %}{% set _collected = namespace(v=0) %}
+{% for d in deals %}{% set _pipeline.v = _pipeline.v + d.remaining_balance %}{% set _collected.v = _collected.v + (d.amount_paid or 0) %}{% endfor %}
+{% set total_pipeline = _pipeline.v %}{% set total_collected = _collected.v %}
+<div class="mw-dd-stats">
+  <div class="mw-dd-stat">
+    <div class="lbl">Total deals</div>
+    <div class="val">{{ deals | length }}</div>
+  </div>
+  <div class="mw-dd-stat">
+    <div class="lbl">Pipeline value</div>
+    <div class="val">{{ total_pipeline | currency }}</div>
+  </div>
+  <div class="mw-dd-stat accent">
+    <div class="lbl">Collected</div>
+    <div class="val">{{ total_collected | currency }}</div>
+  </div>
+  <div class="mw-dd-stat amber">
+    <div class="lbl">Outstanding</div>
+    <div class="val">{{ total_pipeline | currency }}</div>
+  </div>
+</div>
+
+<div class="mw-dd-grid">
+
+  <!-- LEFT -->
+  <div>
+
+    <!-- Contacts -->
+    <div class="mw-card">
+      <div class="mw-card-head">
+        <div class="mw-card-title"><i class="fa-solid fa-users"></i>Contacts</div>
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('dealer_edit', dealer_id=dealer.id) }}" class="mw-btn sm ghost">
+          <i class="fa-solid fa-plus"></i>Add contact
+        </a>
+        {% endif %}
+      </div>
+      {% if dealer.contacts %}
+      {% for c in dealer.contacts %}
+      <div class="mw-dd-contact">
+        <div class="mw-initial">{{ c.name[0].upper() }}</div>
+        <div>
+          <div class="nm">{{ c.name }}</div>
+        </div>
+        <div class="meta">
+          {% if c.phone %}<span>{{ c.phone }}</span>{% endif %}
+          {% if c.email %}<span class="em">{{ c.email }}</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div style="font-size:13px;color:var(--muted-2);padding:8px 0;">No contacts registered for this dealer.</div>
       {% endif %}
     </div>
 
-    {% if deals %}
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
+    <!-- Associated Deals -->
+    <div class="mw-card" style="padding:0;">
+      <div class="mw-card-head" style="padding:18px 22px 0;">
+        <div class="mw-card-title">
+          <i class="fa-solid fa-handshake"></i>Associated deals
+          <span class="mw-card-meta" style="margin-left:4px;">({{ deals | length }})</span>
+        </div>
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('deal_new') }}" class="mw-btn sm primary" style="margin-right:22px;">
+          <i class="fa-solid fa-plus"></i>New deal
+        </a>
+        {% endif %}
+      </div>
+      {% if deals %}
+      <table class="mw-table" style="margin-top:12px;">
         <thead>
-          <tr class="bg-gray-50 text-left border-b border-gray-100">
-            <th class="px-5 py-3 text-xs font-semibold text-gray-500">#</th>
-            <th class="px-5 py-3 text-xs font-semibold text-gray-500">Deal</th>
-            <th class="px-5 py-3 text-xs font-semibold text-gray-500">Status</th>
-            <th class="px-5 py-3 text-xs font-semibold text-gray-500 text-right">Original</th>
-            <th class="px-5 py-3 text-xs font-semibold text-gray-500 text-right">Paid</th>
-            <th class="px-5 py-3 text-xs font-semibold text-gray-500 text-right">Remaining</th>
-            <th class="px-5 py-3 text-xs font-semibold text-gray-500 text-center">%</th>
-            <th class="px-5 py-3 text-xs font-semibold text-gray-500">Created</th>
-            <th class="px-5 py-3"></th>
+          <tr>
+            <th style="padding-left:22px;">#</th>
+            <th>Deal</th>
+            <th>Status</th>
+            <th class="num">Original</th>
+            <th class="num">Paid</th>
+            <th>Progress</th>
           </tr>
         </thead>
         <tbody>
           {% for deal in deals %}
-          <tr class="table-row">
-            <td class="px-5 py-3.5 text-xs text-gray-400 font-mono">{{ deal.id }}</td>
-            <td class="px-5 py-3.5">
+          <tr>
+            <td class="id" style="padding-left:22px;">{{ deal.id }}</td>
+            <td>
               <a href="{{ url_for('deal_detail', deal_id=deal.id) }}"
-                 class="font-semibold text-gray-800 hover:text-blue-600 transition-colors">
-                {{ deal.name }}
-              </a>
+                 style="font-weight:500;color:var(--text);text-decoration:none;">{{ deal.name }}</a>
+              <div style="font-size:11px;color:var(--muted);margin-top:1px;">{{ deal.created_at | fmt_dt }}</div>
             </td>
-            <td class="px-5 py-3.5">
+            <td>
               {% if deal.current_status %}
-              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold
-                           {{ deal.current_status.color | status_badge }}">
-                <span class="w-1.5 h-1.5 rounded-full {{ deal.current_status.color | status_dot }}"></span>
+              <span class="mw-chip {{ deal.current_status.color | mw_chip }}">
+                <span class="dot" style="background:{{ deal.current_status.color | mw_dot }};"></span>
                 {{ deal.current_status.name }}
               </span>
-              {% else %}<span class="text-gray-400 text-xs">—</span>{% endif %}
+              {% else %}<span style="color:var(--muted-2);font-size:12px;">—</span>{% endif %}
             </td>
-            <td class="px-5 py-3.5 text-right text-gray-600">{{ deal.original_value | currency }}</td>
-            <td class="px-5 py-3.5 text-right font-semibold text-green-600">
+            <td class="num">{{ deal.original_value | currency }}</td>
+            <td class="num" style="color:{{ 'var(--accent)' if (deal.amount_paid or 0) > 0 else 'var(--muted-2)' }};">
               {% if (deal.amount_paid or 0) > 0 %}{{ deal.amount_paid | currency }}{% else %}—{% endif %}
             </td>
-            <td class="px-5 py-3.5 text-right font-bold text-gray-900">
-              {{ deal.remaining_balance | currency }}
-            </td>
-            <td class="px-5 py-3.5 text-center">
-              <div class="flex items-center gap-2 justify-center">
-                <div class="w-16 bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                  <div class="h-1.5 rounded-full
-                      {% if deal.payment_pct >= 100 %}bg-green-500
-                      {% elif deal.payment_pct >= 50 %}bg-blue-500
-                      {% else %}bg-amber-400{% endif %}"
-                       style="width: {{ deal.payment_pct }}%"></div>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div class="mw-prog" style="flex:1;max-width:80px;">
+                  <div style="width:{{ deal.payment_pct }}%;"></div>
                 </div>
-                <span class="text-xs text-gray-500 w-8 text-right">{{ deal.payment_pct }}%</span>
+                <span style="font-size:11px;color:var(--muted);min-width:28px;font-feature-settings:'tnum';">{{ deal.payment_pct }}%</span>
               </div>
-            </td>
-            <td class="px-5 py-3.5 text-xs text-gray-500">{{ deal.created_at | fmt_dt }}</td>
-            <td class="px-5 py-3.5">
-              <a href="{{ url_for('deal_detail', deal_id=deal.id) }}"
-                 class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View">
-                <i class="fa-solid fa-eye text-sm"></i>
-              </a>
             </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
-    </div>
-    {% else %}
-    <div class="flex flex-col items-center justify-center py-12 text-gray-400">
-      <i class="fa-solid fa-inbox text-3xl mb-2"></i>
-      <p class="text-sm font-medium">No deals associated with this dealer yet</p>
-    </div>
-    {% endif %}
-  </div>
-
-  {# ── Collection Calls ─────────────────────────────────────────────────── #}
-  <div class="card overflow-hidden">
-    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-      <h3 class="text-sm font-bold text-gray-700 flex items-center gap-2">
-        <i class="fa-solid fa-phone-volume text-indigo-500"></i>
-        Collection Calls
-        {% if collection_calls %}
-        <span class="ml-1 text-xs font-normal text-gray-400">({{ collection_calls | length }} note{{ 's' if collection_calls | length != 1 }})</span>
-        {% endif %}
-      </h3>
+      {% else %}
+      <div class="mw-empty">
+        <i class="fa-solid fa-inbox"></i>
+        <div class="title">No deals yet</div>
+        <div class="sub">No deals associated with this dealer.</div>
+      </div>
+      {% endif %}
     </div>
 
-    {# Add note form #}
-    <div class="px-5 py-4 border-b border-gray-100 bg-gray-50">
-      <form method="POST" action="{{ url_for('dealer_add_collection_call', dealer_id=dealer.id) }}">
-        <label class="block text-xs font-semibold text-gray-600 mb-1.5">New note</label>
-        <textarea name="body" rows="3" required
-                  class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none
-                         focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
-                  placeholder="Describe the call, action taken, or relevant context..."></textarea>
-        <div class="flex justify-end mt-2">
-          <button type="submit" class="btn-primary text-xs">
-            <i class="fa-solid fa-plus"></i> Add Note
-          </button>
+  </div><!-- /LEFT -->
+
+  <!-- RIGHT -->
+  <div>
+
+    <!-- Portal Access -->
+    <div class="mw-card">
+      <div class="mw-card-head">
+        <div class="mw-card-title"><i class="fa-solid fa-globe"></i>Portal access</div>
+      </div>
+      <div class="mw-dd-port">
+        <div class="k">Website</div>
+        <div class="v {% if dealer.website %}link{% endif %}">
+          {% if dealer.website %}{{ dealer.website }}{% else %}—{% endif %}
         </div>
-      </form>
+        {% if dealer.website %}
+        <a href="{{ dealer.website }}" target="_blank" rel="noopener" class="copy" title="Open">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+        {% else %}<div></div>{% endif %}
+      </div>
+      <div class="mw-dd-port">
+        <div class="k">Username</div>
+        <div class="v mono">{{ dealer.portal_username or '—' }}</div>
+        <button type="button" class="copy" onclick="copyText('{{ dealer.portal_username or '' }}')" title="Copy">
+          <i class="fa-regular fa-copy"></i>
+        </button>
+      </div>
+      {% if dealer.portal_password %}
+      <div class="mw-dd-port">
+        <div class="k">Password</div>
+        <div class="v mono" id="pwd-display">••••••••</div>
+        <button type="button" class="copy" onclick="togglePwd('{{ dealer.portal_password }}')" id="pwd-btn" title="Show/Hide">
+          <i class="fa-solid fa-eye" id="pwd-icon"></i>
+        </button>
+      </div>
+      {% else %}
+      <div class="mw-dd-port">
+        <div class="k">Password</div>
+        <div class="v" style="color:var(--muted-2);">—</div>
+        <div></div>
+      </div>
+      {% endif %}
+      <div style="margin-top:14px;font-size:11px;color:var(--muted-2);">
+        <i class="fa-solid fa-shield-halved" style="margin-right:5px;color:var(--accent);"></i>
+        Credentials stored encrypted. Visible only to admins.
+      </div>
     </div>
 
-    {# Notes list #}
-    {% if collection_calls %}
-    <div class="divide-y divide-gray-100 max-h-[560px] overflow-y-auto">
+    <!-- Collection Calls -->
+    <div class="mw-card">
+      <div class="mw-card-head">
+        <div class="mw-card-title">
+          <i class="fa-solid fa-phone-volume"></i>Collection calls
+          <span class="mw-card-meta" style="margin-left:4px;">{{ collection_calls | length }} note{{ 's' if collection_calls | length != 1 }}</span>
+        </div>
+      </div>
+
+      <!-- Add note form -->
+      <div class="mw-dd-call-form">
+        <form method="POST" action="{{ url_for('dealer_add_collection_call', dealer_id=dealer.id) }}">
+          <label class="mw-form-lbl" style="margin-bottom:6px;">Log a new call</label>
+          <textarea name="body" rows="3" required
+                    class="mw-input mw-textarea" style="background:#fff;"
+                    placeholder="Describe the call — action taken, who you spoke to, what to follow up on…"></textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+            <button type="submit" class="mw-btn sm accent">
+              <i class="fa-solid fa-plus"></i>Save note
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {% if collection_calls %}
       {% for call in collection_calls %}
-      <button type="button"
-              onclick="openCallModal({{ loop.index0 }})"
-              class="w-full text-left px-5 py-4 hover:bg-indigo-50 transition-colors group">
-        <div class="flex items-start gap-3">
-          <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <i class="fa-solid fa-phone text-indigo-600 text-xs"></i>
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm text-gray-700 line-clamp-2 leading-snug">{{ call.body }}</p>
-            <div class="flex items-center gap-3 mt-1.5">
-              <span class="text-xs text-gray-400">
-                <i class="fa-regular fa-clock mr-1"></i>{{ call.created_at | fmt_dt }}
-              </span>
-              {% if call.author %}
-              <span class="text-xs text-gray-400">
-                <i class="fa-solid fa-user mr-1"></i>{{ call.author.email }}
-              </span>
-              {% endif %}
-            </div>
-          </div>
-          <i class="fa-solid fa-chevron-right text-xs text-gray-300 group-hover:text-indigo-400 mt-1 flex-shrink-0 transition-colors"></i>
+      <div class="mw-dd-call" onclick="toggleCall(this)">
+        <div class="head">
+          <span class="date">
+            <i class="fa-regular fa-clock" style="margin-right:5px;color:var(--muted-2);font-size:11px;"></i>{{ call.created_at | fmt_dt }}
+          </span>
+          <span class="author">{{ call.author.email.split('@')[0] if call.author else '' }}</span>
         </div>
-      </button>
+        <div class="body call-body clamped">{{ call.body }}</div>
+        <div class="call-hint" style="margin-top:6px;font-size:11px;color:var(--muted-2);">Click to expand</div>
+      </div>
       {% endfor %}
-    </div>
-    {% else %}
-    <div class="flex flex-col items-center justify-center py-12 text-gray-400">
-      <i class="fa-solid fa-phone-slash text-3xl mb-2"></i>
-      <p class="text-sm font-medium">No notes yet</p>
-      <p class="text-xs mt-1">Add the first collection call note above.</p>
-    </div>
-    {% endif %}
-  </div>
-
-</div>
-
-{# ── Collection Call Modal ────────────────────────────────────────────────── #}
-<div id="callModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
-  <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeCallModal()"></div>
-  <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-auto z-10 overflow-hidden">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-      <div class="flex items-center gap-2">
-        <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
-          <i class="fa-solid fa-phone text-indigo-600 text-xs"></i>
-        </div>
-        <h4 class="text-sm font-bold text-gray-800">Collection Call</h4>
+      {% else %}
+      <div class="mw-empty" style="padding:30px 0;">
+        <i class="fa-solid fa-phone-slash"></i>
+        <div class="title">No notes yet</div>
+        <div class="sub">Add the first collection call note above.</div>
       </div>
-      <button type="button" onclick="closeCallModal()"
-              class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-gray-400">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
+      {% endif %}
     </div>
-    <div class="px-6 py-5">
-      <div class="flex items-center gap-4 mb-4 text-xs text-gray-500">
-        <span id="modalDate"><i class="fa-regular fa-clock mr-1"></i></span>
-        <span id="modalAuthor"><i class="fa-solid fa-user mr-1"></i></span>
-      </div>
-      <div class="bg-gray-50 rounded-xl p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap max-h-80 overflow-y-auto" id="modalBody"></div>
-    </div>
-    <div class="px-6 py-4 border-t border-gray-100 flex justify-end">
-      <button type="button" onclick="closeCallModal()" class="btn-secondary text-xs">Close</button>
-    </div>
-  </div>
-</div>
 
+  </div><!-- /RIGHT -->
+</div>
 {% endblock %}
 
 {% block scripts %}
+<style>
+  .call-body.clamped { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+</style>
 <script>
-  const _calls = [
-    {% for call in collection_calls %}
-    {
-      body: {{ call.body | tojson }},
-      date: "{{ call.created_at | fmt_dt }}",
-      author: "{{ call.author.email if call.author else '' }}"
-    }{% if not loop.last %},{% endif %}
-    {% endfor %}
-  ];
-
-  function openCallModal(idx) {
-    const c = _calls[idx];
-    document.getElementById('modalBody').textContent = c.body;
-    document.getElementById('modalDate').innerHTML = '<i class="fa-regular fa-clock mr-1"></i>' + c.date;
-    document.getElementById('modalAuthor').innerHTML = c.author
-      ? '<i class="fa-solid fa-user mr-1"></i>' + c.author
-      : '';
-    document.getElementById('callModal').classList.remove('hidden');
-    document.getElementById('callModal').classList.add('flex');
-    document.body.style.overflow = 'hidden';
-  }
-
-  function closeCallModal() {
-    document.getElementById('callModal').classList.add('hidden');
-    document.getElementById('callModal').classList.remove('flex');
-    document.body.style.overflow = '';
-  }
-
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCallModal(); });
-
   let _pwdVisible = false;
   function togglePwd(value) {
     _pwdVisible = !_pwdVisible;
     document.getElementById('pwd-display').textContent = _pwdVisible ? value : '••••••••';
-    document.getElementById('pwd-icon').className = _pwdVisible
-      ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+    document.getElementById('pwd-icon').className = _pwdVisible ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+  }
+  function copyText(text) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).catch(() => {});
+  }
+  function toggleCall(el) {
+    const body = el.querySelector('.call-body');
+    const hint = el.querySelector('.call-hint');
+    const expanded = !body.classList.contains('clamped');
+    body.classList.toggle('clamped', expanded);
+    hint.textContent = expanded ? 'Click to expand' : 'Click to collapse';
   }
 </script>
 {% endblock %}

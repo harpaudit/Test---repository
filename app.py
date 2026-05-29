@@ -15,6 +15,30 @@ from models import CollectionCall, Deal, DealStatusHistory, Dealer, DealerContac
 #  Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+class SimplePagination:
+    """Pagination wrapper for in-memory sorted lists."""
+    def __init__(self, items, page, per_page, total):
+        self.items    = items
+        self.page     = page
+        self.per_page = per_page
+        self.total    = total
+        self.pages    = max(1, (total + per_page - 1) // per_page)
+        self.has_prev = page > 1
+        self.has_next = page < self.pages
+        self.prev_num = page - 1
+        self.next_num = page + 1
+
+    def iter_pages(self, left_edge=1, right_edge=1, left_current=2, right_current=2):
+        last = 0
+        for num in range(1, self.pages + 1):
+            if (num <= left_edge or
+                    self.page - left_current - 1 < num < self.page + right_current or
+                    num > self.pages - right_edge):
+                if last + 1 != num:
+                    yield None
+                yield num
+                last = num
+
 STATUS_COLORS = {
     "blue":   "bg-blue-100 text-blue-800 border border-blue-200",
     "red":    "bg-red-100 text-red-800 border border-red-200",
@@ -165,6 +189,19 @@ def create_app():
             return "—"
         return value.strftime("%b %d %Y, %H:%M")
 
+    _MW_CHIP = {"green":"green","blue":"blue","yellow":"amber","gray":"gray",
+                "red":"red","purple":"blue","orange":"amber"}
+    _MW_DOT  = {"green":"#3f6651","blue":"#4f7a9a","yellow":"#c4a050",
+                "gray":"#a4a895","red":"#b8533a","purple":"#7b5ea7","orange":"#c4a050"}
+
+    @app.template_filter("mw_chip")
+    def mw_chip_filter(color):
+        return _MW_CHIP.get(color, "gray")
+
+    @app.template_filter("mw_dot")
+    def mw_dot_filter(color):
+        return _MW_DOT.get(color, "#a4a895")
+
     # ── Context processor ─────────────────────────────────────────────────────
     @app.context_processor
     def inject_globals():
@@ -228,7 +265,14 @@ def create_app():
                 login_user(user, remember=True)
                 return redirect(request.args.get("next") or url_for("dashboard"))
             flash("Invalid email or password.", "error")
-        return render_template("login.html")
+        all_d = Deal.query.all()
+        return render_template(
+            "login.html",
+            login_deals=Deal.query.count(),
+            login_dealers=Dealer.query.filter_by(is_active=True).count(),
+            login_pipeline=sum(d.pipeline_value for d in all_d),
+            login_collected=sum((d.amount_paid or 0.0) for d in all_d),
+        )
 
     @app.route("/logout")
     @login_required
@@ -245,7 +289,16 @@ def create_app():
     @login_required
     def dashboard():
         installer_filter = request.args.get("installer_id", "")
-        status_filter = request.args.get("status_id", "")
+        status_filter    = request.args.get("status_id", "")
+        page             = request.args.get("page", 1, type=int)
+        per_page_raw     = request.args.get("per_page", 10, type=int)
+        per_page         = per_page_raw if per_page_raw in (10, 20, 50) else 10
+        sort             = request.args.get("sort", "created")
+        direction        = request.args.get("dir", "desc")
+        if sort not in ("created", "original", "remaining"):
+            sort = "created"
+        if direction not in ("asc", "desc"):
+            direction = "desc"
 
         query = Deal.query
         if installer_filter:
@@ -253,15 +306,25 @@ def create_app():
         if status_filter:
             query = query.filter_by(current_status_id=int(status_filter))
 
-        deals = query.order_by(Deal.created_at.desc()).all()
-        all_deals = Deal.query.all()
-        dealers = Dealer.query.filter_by(is_active=True).order_by(Dealer.name).all()
-        statuses = Status.query.order_by(Status.order).all()
+        if sort == "created":
+            order_col = Deal.created_at.desc() if direction == "desc" else Deal.created_at.asc()
+            pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
+        else:
+            key_fn = (lambda d: d.original_value) if sort == "original" else (lambda d: d.remaining_balance)
+            all_filtered = sorted(query.all(), key=key_fn, reverse=(direction == "desc"))
+            total  = len(all_filtered)
+            start  = (page - 1) * per_page
+            pagination = SimplePagination(all_filtered[start:start + per_page], page, per_page, total)
 
-        paid_status = Status.query.filter_by(name="Paid").first()
+        deals = pagination.items
+
+        all_deals = Deal.query.all()
+        dealers   = Dealer.query.filter_by(is_active=True).order_by(Dealer.name).all()
+        statuses  = Status.query.order_by(Status.order).all()
+
+        paid_status    = Status.query.filter_by(name="Paid").first()
         total_pipeline = sum(d.pipeline_value for d in all_deals)
 
-        # Total collected = explicit payments + original value of "Paid" deals with no recorded payments
         total_collected = 0.0
         for d in all_deals:
             if (d.amount_paid or 0) > 0:
@@ -288,6 +351,7 @@ def create_app():
 
         status_kpis = [
             {
+                "id": s.id,
                 "name": s.name,
                 "color": s.color,
                 "count": sum(1 for d in all_deals if d.current_status_id == s.id),
@@ -298,6 +362,11 @@ def create_app():
         return render_template(
             "dashboard.html",
             deals=deals,
+            pagination=pagination,
+            per_page=per_page,
+            sort=sort,
+            direction=direction,
+            all_deals=all_deals,
             dealers=dealers,
             statuses=statuses,
             total_deals=len(all_deals),
@@ -330,6 +399,9 @@ def create_app():
             )
 
             if not name or not installer_id:
+                if request.form.get("_modal") == "1":
+                    from flask import jsonify
+                    return jsonify({"ok": False, "error": "Deal name and dealer are required."}), 400
                 flash("Deal name and installer are required.", "error")
                 return render_template("deal_form.html", deal=None,
                                        dealers=dealers, statuses=statuses)
@@ -371,6 +443,11 @@ def create_app():
                 ))
 
             db.session.commit()
+
+            if request.form.get("_modal") == "1":
+                from flask import jsonify
+                return jsonify({"ok": True, "deal_id": deal.id, "deal_name": name})
+
             flash(f'Deal "{name}" created successfully.', "success")
             return redirect(url_for("deal_detail", deal_id=deal.id))
 
@@ -386,6 +463,7 @@ def create_app():
     def deal_detail(deal_id):
         deal = Deal.query.get_or_404(deal_id)
         statuses = Status.query.order_by(Status.order).all()
+        dealers  = Dealer.query.filter_by(is_active=True).order_by(Dealer.name).all()
         history = deal.status_history
 
         history_enriched = []
@@ -398,7 +476,8 @@ def create_app():
             })
 
         return render_template("deal_detail.html", deal=deal,
-                               statuses=statuses, history=history_enriched)
+                               statuses=statuses, dealers=dealers,
+                               history=history_enriched)
 
     # ═════════════════════════════════════════════════════════════════════════
     #  DEALS – EDIT
@@ -450,11 +529,35 @@ def create_app():
 
             deal.updated_at = datetime.utcnow()
             db.session.commit()
+
+            if request.form.get("_modal") == "1":
+                from flask import jsonify
+                return jsonify({"ok": True, "deal_name": deal.name})
+
             flash("Deal updated successfully.", "success")
             return redirect(url_for("deal_detail", deal_id=deal.id))
 
         return render_template("deal_form.html", deal=deal,
                                dealers=dealers, statuses=statuses)
+
+    @app.route("/deals/<int:deal_id>/data")
+    @login_required
+    def deal_data(deal_id):
+        from flask import jsonify
+        d = Deal.query.get_or_404(deal_id)
+        return jsonify({
+            "id":               d.id,
+            "name":             d.name,
+            "installer_id":     d.installer_id,
+            "current_status_id":d.current_status_id,
+            "notes":            d.notes or "",
+            "use_redline":      d.use_redline,
+            "system_size":      d.system_size,
+            "company_redline":  d.company_redline,
+            "adders":           d.adders,
+            "contract_amount":  d.contract_amount,
+            "amount_owed":      d.amount_owed,
+        })
 
     # ═════════════════════════════════════════════════════════════════════════
     #  DEALS – UPDATE STATUS
@@ -722,23 +825,33 @@ def create_app():
                 elif Status.query.filter_by(name=name).first():
                     flash("A status with that name already exists.", "error")
                 else:
+                    # Shift down all statuses at or after the target position
+                    for st in Status.query.filter(Status.order >= order).all():
+                        st.order += 1
                     db.session.add(Status(name=name, order=order, color=color))
                     db.session.commit()
                     flash(f'Status "{name}" created.', "success")
 
             elif action == "update":
                 s = Status.query.get_or_404(request.form.get("status_id", type=int))
+                new_order = request.form.get("order", s.order, type=int)
+                if new_order != s.order:
+                    old_order = s.order
+                    if new_order < old_order:
+                        for st in Status.query.filter(Status.order >= new_order, Status.order < old_order, Status.id != s.id).all():
+                            st.order += 1
+                    else:
+                        for st in Status.query.filter(Status.order > old_order, Status.order <= new_order, Status.id != s.id).all():
+                            st.order -= 1
                 s.name = request.form.get("name", s.name).strip()
-                s.order = request.form.get("order", s.order, type=int)
+                s.order = new_order
                 s.color = request.form.get("color", s.color)
                 db.session.commit()
                 flash("Status updated.", "success")
 
             elif action == "delete":
                 s = Status.query.get_or_404(request.form.get("status_id", type=int))
-                if s.is_default:
-                    flash("Default statuses cannot be deleted.", "error")
-                elif s.deals:
+                if s.deals:
                     flash("Cannot delete: deals are using this status.", "error")
                 else:
                     db.session.delete(s)
@@ -749,6 +862,18 @@ def create_app():
 
         statuses = Status.query.order_by(Status.order).all()
         return render_template("admin_statuses.html", statuses=statuses)
+
+    @app.route("/admin/statuses/reorder", methods=["POST"])
+    @login_required
+    @admin_required
+    def admin_statuses_reorder():
+        items = request.get_json() or []
+        for item in items:
+            s = Status.query.get(item["id"])
+            if s:
+                s.order = item["order"]
+        db.session.commit()
+        return {"ok": True}
 
     # ═════════════════════════════════════════════════════════════════════════
     #  EXPORT

@@ -1,362 +1,553 @@
 {% extends "base.html" %}
-
 {% block title %}{{ deal.name }} — MOSES CRM{% endblock %}
-{% block page_title %}{{ deal.name }}{% endblock %}
-{% block page_subtitle %}<p class="text-xs text-gray-500 mt-0.5">Deal detail &bull; ID #{{ deal.id }}</p>{% endblock %}
-
-{% block header_actions %}
-<a href="{{ url_for('dashboard') }}" class="btn-secondary text-xs">
-  <i class="fa-solid fa-arrow-left"></i> Dashboard
-</a>
-{% if current_user.is_admin %}
-<a href="{{ url_for('deal_edit', deal_id=deal.id) }}" class="btn-primary text-xs">
-  <i class="fa-solid fa-pen"></i> Edit
-</a>
-{% endif %}
-{% endblock %}
 
 {% block content %}
-<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+<style>
+  .dd-cols { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
 
-  {# ── Left: Deal info ──────────────────────────────────────────────────────── #}
-  <div class="xl:col-span-2 space-y-5">
+  .dd-pay-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: center; }
+  .dd-pay-num  { font-size: 36px; font-weight: 600; color: var(--text); letter-spacing: -.025em; font-feature-settings: 'lnum','tnum'; line-height: 1; }
+  .dd-pay-of   { font-size: 14px; color: var(--muted); margin-top: 6px; }
+  .dd-pay-of b { color: var(--text); font-weight: 600; }
+  .dd-pay-delta { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; background: var(--green-soft); color: #2a5a35; font-size: 11px; font-weight: 600; border-radius: 999px; margin-top: 10px; }
+  .dd-pay-delta.amber { background: var(--amber-soft); color: var(--amber); }
 
-    <!-- Header -->
-    <div class="card p-6">
-      <div class="flex items-start justify-between gap-4 flex-wrap">
+  .dd-pay-stats { display: flex; flex-direction: column; gap: 10px; }
+  .dd-pay-stat  { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--surface-2); border-radius: 8px; border: 1px solid var(--border-soft); }
+  .dd-pay-stat .lbl { font-size: 12px; color: var(--muted); }
+  .dd-pay-stat .val { font-size: 15px; font-weight: 600; color: var(--text); font-feature-settings: 'lnum','tnum'; }
+  .dd-pay-stat.amber .val { color: var(--amber); }
+  .dd-pay-stat.green .val { color: var(--accent); }
+
+  .dd-prog-wrap { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border-soft); }
+  .dd-prog-row  { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .dd-prog-row b { color: var(--text); }
+
+  .dd-paylog { margin-top: 22px; display: flex; flex-direction: column; gap: 0; }
+  .dd-paylog-row { display: grid; grid-template-columns: 24px 1fr auto; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-soft); }
+  .dd-paylog-row:last-child { border-bottom: none; }
+  .dd-paylog-icon { width: 24px; height: 24px; border-radius: 999px; background: var(--green-soft); color: var(--accent); font-size: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .dd-paylog-date { font-size: 13px; color: var(--text); font-weight: 500; }
+  .dd-paylog-note { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .dd-paylog-amt  { font-size: 14px; font-weight: 600; color: var(--accent); font-feature-settings: 'lnum','tnum'; white-space: nowrap; }
+  .dd-paylog-del  { opacity: 0; transition: opacity .15s; }
+  .dd-paylog-row:hover .dd-paylog-del { opacity: 1; }
+
+  .dd-rl-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+  .dd-rl-tile { padding: 14px 16px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 10px; }
+  .dd-rl-lbl  { font-size: 11px; color: var(--muted); }
+  .dd-rl-val  { font-size: 20px; font-weight: 600; color: var(--text); margin-top: 4px; letter-spacing: -.01em; font-feature-settings: 'lnum','tnum'; }
+  .dd-rl-unit { font-size: 11px; color: var(--muted-2); margin-left: 3px; font-weight: 400; }
+
+  .dd-formula { background: var(--surface-2); border: 1px dashed #d8d4c4; border-radius: 10px; padding: 14px 18px; font-size: 13px; color: var(--text-2); margin-bottom: 18px; line-height: 1.7; font-family: 'Inter', sans-serif; }
+  .dd-formula b   { color: var(--text); font-weight: 600; }
+  .dd-formula .res { color: var(--accent); font-weight: 700; }
+
+  .dd-res-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .dd-res-tile { padding: 18px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 12px; text-align: center; }
+  .dd-res-tile.feat { background: linear-gradient(155deg,#e8f0ec,#f0f4ec); border-color: #c6d5be; }
+  .dd-res-lbl { font-size: 11px; color: var(--muted); }
+  .dd-res-val { font-size: 24px; font-weight: 600; color: var(--text); margin-top: 6px; letter-spacing: -.015em; font-feature-settings: 'lnum','tnum'; }
+  .dd-res-tile.feat .dd-res-val { color: var(--accent-deep); }
+
+  .dd-paid-banner { display: flex; align-items: center; gap: 14px; padding: 18px 20px; background: var(--green-soft); border: 1px solid #cfe1c8; border-radius: 14px; margin-bottom: 14px; }
+  .dd-paid-icon { width: 42px; height: 42px; border-radius: 12px; background: #fff; display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 18px; flex-shrink: 0; }
+</style>
+
+<!-- Breadcrumb -->
+<div class="mw-bread">
+  <a href="{{ url_for('dashboard') }}">Deals</a>
+  <span class="sep">/</span>
+  <span style="color:var(--text);">{{ deal.name }}</span>
+</div>
+
+<!-- Page head -->
+<div class="mw-page-head">
+  <div>
+    <div style="font-size:12px;color:var(--muted);font-weight:500;background:#fff;border:1px solid var(--border);padding:2px 10px;border-radius:999px;display:inline-block;margin-bottom:8px;font-feature-settings:'tnum';">#{{ deal.id }}</div>
+    <div class="mw-h1">{{ deal.name }}</div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:13px;color:var(--muted);">
+      {% if deal.current_status %}
+      <span class="mw-chip {{ deal.current_status.color | mw_chip }}">
+        <span class="dot" style="background:{{ deal.current_status.color | mw_dot }};"></span>
+        {{ deal.current_status.name }}
+      </span>
+      <span style="color:#c8c6b5;">·</span>
+      {% endif %}
+      <span><b style="color:var(--text);">{{ deal.dealer.name if deal.dealer else '—' }}</b> dealer</span>
+      <span style="color:#c8c6b5;">·</span>
+      <span>Created <b style="color:var(--text);">{{ deal.created_at | fmt_dt }}</b></span>
+      {% if deal.creator %}
+      <span style="color:#c8c6b5;">·</span>
+      <span>by <b style="color:var(--text);">{{ deal.creator.email.split('@')[0] }}</b></span>
+      {% endif %}
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-shrink:0;">
+    <a href="{{ url_for('dashboard') }}" class="mw-btn">
+      <i class="fa-solid fa-arrow-left"></i>Back
+    </a>
+    {% if current_user.is_admin %}
+    <button type="button" class="mw-btn primary" onclick="mwModalOpen('Edit deal', 'edit-deal-tpl'); setTimeout(()=>edSetRedline({{ 'true' if deal.use_redline else 'false' }}),0)">
+      <i class="fa-solid fa-pen"></i>Edit deal
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="dd-cols">
+
+  <!-- LEFT -->
+  <div>
+
+    <!-- Payment Summary -->
+    <div class="mw-card">
+      <div class="mw-card-head">
+        <div class="mw-card-title"><i class="fa-solid fa-coins"></i>Payment summary</div>
+        <div class="mw-card-meta">{{ deal.payments | length }} payment{{ 's' if deal.payments | length != 1 }} recorded</div>
+      </div>
+
+      <div class="dd-pay-hero">
         <div>
-          <h2 class="text-xl font-bold text-gray-900 mb-1">{{ deal.name }}</h2>
-          <div class="flex flex-wrap items-center gap-3 text-sm text-gray-500">
-            <span class="flex items-center gap-1.5">
-              <i class="fa-solid fa-address-book text-orange-400"></i>
-              {{ deal.dealer.name if deal.dealer else '—' }}
-            </span>
-            <span class="text-gray-300">|</span>
-            <span><i class="fa-regular fa-calendar text-gray-400 mr-1"></i>{{ deal.created_at | fmt_dt }}</span>
-            {% if deal.creator %}
-            <span class="text-gray-300">|</span>
-            <span><i class="fa-solid fa-user text-gray-400 mr-1"></i>{{ deal.creator.email }}</span>
+          <div class="dd-pay-num">{{ (deal.amount_paid or 0) | currency }}</div>
+          <div class="dd-pay-of">collected of <b>{{ deal.original_value | currency }}</b></div>
+          <span class="dd-pay-delta {% if deal.payment_pct < 50 %}amber{% endif %}">
+            {% if deal.payment_pct >= 100 %}✓ Paid in full{% else %}▲ {{ deal.payment_pct }}% complete{% endif %}
+          </span>
+        </div>
+        <div class="dd-pay-stats">
+          <div class="dd-pay-stat">
+            <span class="lbl">Original value</span>
+            <span class="val">{{ deal.original_value | currency }}</span>
+          </div>
+          <div class="dd-pay-stat {% if deal.remaining_balance > 0 %}amber{% else %}green{% endif %}">
+            <span class="lbl">Remaining</span>
+            <span class="val">{{ deal.remaining_balance | currency }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="dd-prog-wrap">
+        <div class="dd-prog-row">
+          <span>Progress</span>
+          <span><b>{{ deal.payment_pct }}%</b> · {{ deal.remaining_balance | currency }} remaining</span>
+        </div>
+        <div class="mw-prog"><div style="width:{{ deal.payment_pct }}%;"></div></div>
+      </div>
+
+      {% if deal.payments %}
+      <div class="dd-paylog">
+        {% for p in deal.payments %}
+        <div class="dd-paylog-row">
+          <div class="dd-paylog-icon"><i class="fa-solid fa-check"></i></div>
+          <div>
+            <div class="dd-paylog-date">{{ p.paid_at | fmt_dt }}</div>
+            <div class="dd-paylog-note">
+              {{ p.note or 'No note' }}
+              {% if p.recorder %} · {{ p.recorder.email.split('@')[0] }}{% endif %}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="dd-paylog-amt">+{{ p.amount | currency }}</div>
+            {% if current_user.is_admin %}
+            <form method="POST" action="{{ url_for('payment_delete', deal_id=deal.id, payment_id=p.id) }}"
+                  onsubmit="return confirm('Delete payment of {{ p.amount | currency }}?')" style="margin:0;">
+              <button type="submit" class="dd-paylog-del mw-btn sm ghost" style="color:var(--red);padding:4px 6px;" title="Delete">
+                <i class="fa-solid fa-trash" style="font-size:11px;"></i>
+              </button>
+            </form>
             {% endif %}
           </div>
         </div>
-        {% if deal.current_status %}
-        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold
-                     {{ deal.current_status.color | status_badge }}">
-          <span class="w-2 h-2 rounded-full {{ deal.current_status.color | status_dot }}"></span>
-          {{ deal.current_status.name }}
-        </span>
-        {% endif %}
+        {% endfor %}
       </div>
+      {% endif %}
+
       {% if deal.notes %}
-      <div class="mt-4 pt-4 border-t border-gray-100">
-        <p class="text-sm text-gray-600 leading-relaxed">
-          <i class="fa-solid fa-note-sticky text-gray-400 mr-1"></i> {{ deal.notes }}
-        </p>
+      <div class="mw-alert muted" style="margin-top:18px;">
+        <i class="fa-solid fa-note-sticky"></i>
+        <div>{{ deal.notes }}</div>
       </div>
       {% endif %}
     </div>
 
-    <!-- Payment summary -->
-    <div class="card p-6">
-      <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
-        <i class="fa-solid fa-coins text-amber-500"></i> Payment Summary
-      </h3>
-      <div class="grid grid-cols-3 gap-4 mb-5">
-        <div class="text-center p-4 bg-gray-50 rounded-xl border border-gray-200">
-          <p class="text-xs text-gray-500 mb-1">Original Value</p>
-          <p class="text-xl font-black text-gray-800">{{ deal.original_value | currency }}</p>
-        </div>
-        <div class="text-center p-4 bg-green-50 rounded-xl border border-green-200">
-          <p class="text-xs text-green-600 mb-1">Total Paid</p>
-          <p class="text-xl font-black text-green-700">{{ (deal.amount_paid or 0) | currency }}</p>
-        </div>
-        <div class="text-center p-4 {% if deal.remaining_balance == 0 %}bg-green-50 border-green-200{% else %}bg-amber-50 border-amber-200{% endif %} rounded-xl border">
-          <p class="text-xs {% if deal.remaining_balance == 0 %}text-green-600{% else %}text-amber-600{% endif %} mb-1">Remaining</p>
-          <p class="text-xl font-black {% if deal.remaining_balance == 0 %}text-green-700{% else %}text-amber-700{% endif %}">
-            {{ deal.remaining_balance | currency }}
-          </p>
-        </div>
-      </div>
-
-      <!-- Progress bar -->
-      <div class="mb-1 flex items-center justify-between text-xs text-gray-500">
-        <span>Payment progress</span>
-        <span class="font-semibold">{{ deal.payment_pct }}%</span>
-      </div>
-      <div class="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-        <div class="h-3 rounded-full transition-all duration-500
-                    {% if deal.payment_pct >= 100 %}bg-green-500{% elif deal.payment_pct >= 50 %}bg-blue-500{% else %}bg-amber-400{% endif %}"
-             style="width: {{ deal.payment_pct }}%"></div>
-      </div>
-
-      <!-- Payment history table -->
-      {% if deal.payments %}
-      <div class="mt-5">
-        <h4 class="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3">
-          <i class="fa-solid fa-list mr-1"></i> Payment History ({{ deal.payments | length }})
-        </h4>
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="bg-gray-50 text-left">
-              <th class="px-3 py-2 text-xs font-semibold text-gray-500 rounded-tl-lg">Date</th>
-              <th class="px-3 py-2 text-xs font-semibold text-gray-500 text-right">Amount</th>
-              <th class="px-3 py-2 text-xs font-semibold text-gray-500">Note</th>
-              <th class="px-3 py-2 text-xs font-semibold text-gray-500">Recorded by</th>
-              {% if current_user.is_admin %}
-              <th class="px-3 py-2 text-xs font-semibold text-gray-500 rounded-tr-lg"></th>
-              {% endif %}
-            </tr>
-          </thead>
-          <tbody>
-            {% for p in deal.payments %}
-            <tr class="border-t border-gray-100">
-              <td class="px-3 py-2.5 text-xs text-gray-500">{{ p.paid_at | fmt_dt }}</td>
-              <td class="px-3 py-2.5 text-right font-bold text-green-600">{{ p.amount | currency }}</td>
-              <td class="px-3 py-2.5 text-xs text-gray-500">{{ p.note or '—' }}</td>
-              <td class="px-3 py-2.5 text-xs text-gray-400">{{ p.recorder.email if p.recorder else '—' }}</td>
-              {% if current_user.is_admin %}
-              <td class="px-3 py-2.5 text-right">
-                <form method="POST"
-                      action="{{ url_for('payment_delete', deal_id=deal.id, payment_id=p.id) }}"
-                      onsubmit="return confirm('Delete payment of {{ p.amount | currency }}? This cannot be undone.')">
-                  <button type="submit"
-                          class="text-red-400 hover:text-red-600 transition-colors"
-                          title="Delete payment">
-                    <i class="fa-solid fa-trash text-xs"></i>
-                  </button>
-                </form>
-              </td>
-              {% endif %}
-            </tr>
-            {% endfor %}
-            <tr class="border-t-2 border-gray-200 bg-gray-50">
-              <td class="px-3 py-2 text-xs font-bold text-gray-700">Total</td>
-              <td class="px-3 py-2 text-right font-black text-green-700">{{ (deal.amount_paid or 0) | currency }}</td>
-              <td colspan="{% if current_user.is_admin %}3{% else %}2{% endif %}"></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      {% endif %}
-    </div>
-
-    <!-- Financial details -->
+    <!-- Financial Details -->
     {% if deal.use_redline %}
-    <div class="card p-6">
-      <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
-        <span class="w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center">
-          <i class="fa-solid fa-calculator text-indigo-600 text-xs"></i>
-        </span>
-        Redline Calculation
-      </h3>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
-        <div class="bg-gray-50 rounded-xl p-4 text-center">
-          <p class="text-xs text-gray-500 mb-1">System Size</p>
-          <p class="text-lg font-bold text-gray-800">{{ "%g" | format(deal.system_size or 0) }}</p>
-          <p class="text-xs text-gray-400">W</p>
+    <div class="mw-card">
+      <div class="mw-card-head">
+        <div class="mw-card-title"><i class="fa-solid fa-calculator"></i>Redline calculation</div>
+        <div class="mw-card-meta">Redline mode enabled</div>
+      </div>
+
+      <div class="dd-rl-grid">
+        <div class="dd-rl-tile">
+          <div class="dd-rl-lbl">System size</div>
+          <div class="dd-rl-val">{{ "%g" | format(deal.system_size or 0) }}<span class="dd-rl-unit">W</span></div>
         </div>
-        <div class="bg-gray-50 rounded-xl p-4 text-center">
-          <p class="text-xs text-gray-500 mb-1">Redline</p>
-          <p class="text-lg font-bold text-gray-800">${{ "%.4f" | format(deal.company_redline or 0) }}</p>
-          <p class="text-xs text-gray-400">per watt</p>
+        <div class="dd-rl-tile">
+          <div class="dd-rl-lbl">Redline</div>
+          <div class="dd-rl-val">${{ "%.4f" | format(deal.company_redline or 0) }}<span class="dd-rl-unit">/W</span></div>
         </div>
-        <div class="bg-gray-50 rounded-xl p-4 text-center">
-          <p class="text-xs text-gray-500 mb-1">Adders</p>
-          <p class="text-lg font-bold text-gray-800">{{ deal.adders | currency }}</p>
+        <div class="dd-rl-tile">
+          <div class="dd-rl-lbl">Adders</div>
+          <div class="dd-rl-val">{{ deal.adders | currency }}</div>
         </div>
-        <div class="bg-gray-50 rounded-xl p-4 text-center">
-          <p class="text-xs text-gray-500 mb-1">Contract Amount</p>
-          <p class="text-lg font-bold text-gray-800">{{ deal.contract_amount | currency }}</p>
+        <div class="dd-rl-tile">
+          <div class="dd-rl-lbl">Contract amount</div>
+          <div class="dd-rl-val">{{ deal.contract_amount | currency }}</div>
         </div>
       </div>
-      <div class="bg-slate-900 rounded-xl p-4 mb-4 text-xs text-slate-300 font-mono">
-        <p class="text-slate-500 mb-1"># Applied formula</p>
-        <p>Commission = {{ deal.contract_amount | currency }} - ({{ "%g" | format(deal.system_size or 0) }}W × ${{ "%.4f" | format(deal.company_redline or 0) }}/W) - {{ deal.adders | currency }}</p>
-        <p class="text-green-400 mt-0.5">           = <strong>{{ deal.total_commission | currency }}</strong></p>
+
+      <div class="dd-formula">
+        Commission = <b>{{ deal.contract_amount | currency }}</b> − ({{ "%g" | format(deal.system_size or 0) }}W × <b>${{ "%.4f" | format(deal.company_redline or 0) }}</b>) − <b>{{ deal.adders | currency }}</b>
+        <br>= <span class="res">{{ deal.total_commission | currency }}</span>
       </div>
-      <div class="grid grid-cols-3 gap-4">
-        <div class="text-center p-4 bg-green-50 border border-green-200 rounded-xl">
-          <p class="text-xs text-green-600 font-semibold mb-1">Total Commission</p>
-          <p class="text-2xl font-black {{ 'text-green-700' if (deal.total_commission or 0) >= 0 else 'text-red-600' }}">
-            {{ deal.total_commission | currency }}
-          </p>
+
+      <div class="dd-res-grid">
+        <div class="dd-res-tile feat">
+          <div class="dd-res-lbl">Total commission</div>
+          <div class="dd-res-val">{{ deal.total_commission | currency }}</div>
         </div>
-        <div class="text-center p-4 bg-blue-50 border border-blue-200 rounded-xl">
-          <p class="text-xs text-blue-600 font-semibold mb-1">Total PPW</p>
-          <p class="text-2xl font-black text-blue-700">${{ "%.4f" | format(deal.total_ppw or 0) }}</p>
-          <p class="text-xs text-blue-400">$/W</p>
+        <div class="dd-res-tile">
+          <div class="dd-res-lbl">Total PPW</div>
+          <div class="dd-res-val">${{ "%.4f" | format(deal.total_ppw or 0) }}<span style="font-size:11px;color:var(--muted);margin-left:3px;font-weight:400;">/W</span></div>
         </div>
-        <div class="text-center p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
-          <p class="text-xs text-indigo-600 font-semibold mb-1">Net PPW</p>
-          <p class="text-2xl font-black text-indigo-700">${{ "%.4f" | format(deal.net_ppw or 0) }}</p>
-          <p class="text-xs text-indigo-400">$/W</p>
+        <div class="dd-res-tile">
+          <div class="dd-res-lbl">Net PPW</div>
+          <div class="dd-res-val">${{ "%.4f" | format(deal.net_ppw or 0) }}<span style="font-size:11px;color:var(--muted);margin-left:3px;font-weight:400;">/W</span></div>
         </div>
       </div>
     </div>
     {% else %}
-    <div class="card p-6">
-      <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
-        <i class="fa-solid fa-dollar-sign text-slate-500"></i> Fixed Amount (No Redline)
-      </h3>
-      <div class="text-center p-8 bg-slate-50 rounded-xl border border-slate-200">
-        <p class="text-xs text-gray-500 font-semibold mb-2 uppercase tracking-wider">Total Amount Owed</p>
-        <p class="text-4xl font-black text-gray-800">{{ deal.amount_owed | currency }}</p>
-        <p class="text-sm text-gray-400 mt-2">Dealer does not provide granular data</p>
+    <div class="mw-card">
+      <div class="mw-card-head">
+        <div class="mw-card-title"><i class="fa-solid fa-dollar-sign"></i>Fixed amount</div>
+        <div class="mw-card-meta">No redline</div>
+      </div>
+      <div style="padding:24px;background:var(--surface-2);border-radius:12px;border:1px solid var(--border-soft);text-align:center;">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Total amount owed</div>
+        <div style="font-size:40px;font-weight:600;color:var(--text);letter-spacing:-.025em;font-feature-settings:'lnum','tnum';">{{ deal.amount_owed | currency }}</div>
+        <div style="font-size:12px;color:var(--muted-2);margin-top:6px;">Dealer does not provide granular data</div>
       </div>
     </div>
     {% endif %}
 
-  </div>
+  </div><!-- /LEFT -->
 
-  {# ── Right: Payments + Status ─────────────────────────────────────────────── #}
-  <div class="xl:col-span-1 space-y-5">
+  <!-- RIGHT (sidebar) -->
+  <div>
 
-    {# ── Record Payment card ── show when there's a remaining balance #}
     {% if deal.remaining_balance > 0 %}
-    <div class="card p-5 border-green-300" style="border-color: #86efac;">
-      <h3 class="text-sm font-bold text-gray-700 mb-1 flex items-center gap-2">
-        <i class="fa-solid fa-money-bill-wave text-green-500"></i> Record Payment
-      </h3>
-      <p class="text-xs text-gray-400 mb-4">
-        Remaining: <span class="font-bold text-amber-600">{{ deal.remaining_balance | currency }}</span>
-      </p>
+    <!-- Record Payment -->
+    <div class="mw-card" style="margin-bottom:14px;">
+      <div class="mw-card-head">
+        <div class="mw-card-title"><i class="fa-solid fa-money-bill-wave"></i>Record payment</div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
+        Remaining: <b style="color:var(--amber);">{{ deal.remaining_balance | currency }}</b>
+      </div>
       <form method="POST" action="{{ url_for('deal_add_payment', deal_id=deal.id) }}">
-        <div class="mb-3">
-          <label class="form-label">Payment Amount ($) <span class="text-red-500">*</span></label>
-          <div class="relative">
-            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400 font-semibold text-sm">$</span>
+        <div class="mw-field">
+          <label class="mw-form-lbl">Amount <span class="req">*</span></label>
+          <div class="mw-input-wrap">
+            <i class="left fa-solid fa-dollar-sign"></i>
             <input type="number" name="payment_amount" step="0.01" min="0.01"
                    max="{{ deal.remaining_balance }}" required
-                   placeholder="0.00"
-                   class="form-input pl-7"
+                   placeholder="0.00" class="mw-input mono"
                    oninput="updatePreview(this.value)">
           </div>
-          <p id="balance-preview" class="text-xs text-gray-400 mt-1"></p>
+          <div id="balance-preview" style="font-size:11px;color:var(--muted-2);margin-top:5px;"></div>
         </div>
-        <div class="mb-4">
-          <label class="form-label">Note (optional)</label>
-          <input type="text" name="note" placeholder="e.g. Wire transfer received..."
-                 class="form-input">
+        <div class="mw-field" style="margin-bottom:14px;">
+          <label class="mw-form-lbl">Note (optional)</label>
+          <input type="text" name="note" placeholder="Wire transfer received…" class="mw-input">
         </div>
-        <button type="submit" class="btn-green w-full justify-center text-sm">
-          <i class="fa-solid fa-circle-check"></i> Record Payment
+        <button type="submit" class="mw-btn accent mw-btn-full">
+          <i class="fa-solid fa-plus"></i>Record payment
         </button>
       </form>
     </div>
     {% else %}
-    <div class="card p-5 bg-green-50 border-green-200">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
-          <i class="fa-solid fa-circle-check text-green-600 text-lg"></i>
-        </div>
-        <div>
-          <p class="text-sm font-bold text-green-800">Fully Paid</p>
-          <p class="text-xs text-green-600">This deal has been paid in full.</p>
-        </div>
+    <div class="dd-paid-banner" style="margin-bottom:14px;">
+      <div class="dd-paid-icon"><i class="fa-solid fa-circle-check"></i></div>
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--accent-deep);">Fully Paid</div>
+        <div style="font-size:12px;color:var(--accent);margin-top:2px;">This deal has been paid in full.</div>
       </div>
     </div>
     {% endif %}
 
     <!-- Update Status -->
-    <div class="card p-5">
-      <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
-        <i class="fa-solid fa-arrows-rotate text-blue-500"></i> Update Status
-      </h3>
-      <form method="POST" action="{{ url_for('deal_update_status', deal_id=deal.id) }}" id="status-form">
-        <div class="mb-3">
-          <label class="form-label">New Status</label>
-          <select name="status_id" id="status-select" class="form-input">
+    <div class="mw-card" style="margin-bottom:14px;">
+      <div class="mw-card-head">
+        <div class="mw-card-title"><i class="fa-solid fa-arrows-rotate"></i>Update status</div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
+        Current: <b style="color:var(--text);">{{ deal.current_status.name if deal.current_status else '—' }}</b>
+      </div>
+      <form method="POST" action="{{ url_for('deal_update_status', deal_id=deal.id) }}">
+        <div class="mw-field">
+          <label class="mw-form-lbl">New status</label>
+          <select name="status_id" class="mw-input">
             {% for s in statuses %}
-            <option value="{{ s.id }}"
-                    {% if deal.current_status_id == s.id %}selected{% endif %}>
-              {{ s.name }}
+            <option value="{{ s.id }}" {% if deal.current_status_id == s.id %}selected{% endif %}>
+              {{ s.name }}{% if deal.current_status_id == s.id %} (current){% endif %}
             </option>
             {% endfor %}
           </select>
         </div>
-
-        <div class="mb-4">
-          <label class="form-label">Note (optional)</label>
-          <input type="text" name="note" placeholder="Add a comment — submit without changing status to log a note only."
-                 class="form-input">
+        <div class="mw-field" style="margin-bottom:14px;">
+          <label class="mw-form-lbl">Note (optional)</label>
+          <input type="text" name="note" placeholder="Add a comment…" class="mw-input">
         </div>
-        <button type="submit" class="btn-primary w-full justify-center text-sm">
-          <i class="fa-solid fa-check"></i> Update Status
+        <button type="submit" class="mw-btn primary mw-btn-full">
+          <i class="fa-solid fa-check"></i>Update status
         </button>
       </form>
     </div>
 
-    <!-- Status Timeline -->
-    <div class="card p-5">
-      <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
-        <i class="fa-solid fa-timeline text-blue-500"></i> Status History
-      </h3>
-      {% if history %}
-      <div class="space-y-0">
-        {% for item in history | reverse %}
-        <div class="flex gap-3 {% if not loop.last %}pb-4{% endif %}">
-          <div class="flex flex-col items-center">
-            <div class="w-3 h-3 rounded-full flex-shrink-0 mt-1
-                        {% if item.is_current %}ring-2 ring-blue-400 ring-offset-1 bg-blue-500
-                        {% else %}bg-gray-300{% endif %}"></div>
-            {% if not loop.last %}
-            <div class="w-0.5 flex-1 bg-gray-200 mt-1 min-h-[1.5rem]"></div>
-            {% endif %}
-          </div>
-          <div class="flex-1 pb-4 {% if not loop.last %}border-b border-dashed border-gray-100{% endif %}">
-            <div class="flex items-start justify-between gap-2">
-              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold
-                           {{ item.entry.status.color | status_badge }}">
-                {{ item.entry.status.name }}
-              </span>
-              {% if item.is_current %}
-              <span class="text-xs text-blue-600 font-semibold">current</span>
-              {% endif %}
-            </div>
-            <p class="text-xs text-gray-400 mt-1.5">
-              <i class="fa-regular fa-clock mr-1"></i>{{ item.entry.changed_at | fmt_dt }}
-            </p>
-            {% if item.entry.note %}
-            <p class="text-xs text-gray-500 mt-1 italic">"{{ item.entry.note }}"</p>
-            {% endif %}
-            {% if item.entry.changer %}
-            <p class="text-xs text-gray-400 mt-0.5">
-              <i class="fa-solid fa-user mr-1"></i>{{ item.entry.changer.email }}
-            </p>
-            {% endif %}
-            <div class="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gray-100 text-gray-500 text-xs">
-              <i class="fa-regular fa-hourglass text-xs"></i> {{ item.duration }}
-            </div>
-          </div>
-        </div>
-        {% endfor %}
+    <!-- Status History -->
+    <div class="mw-card" style="margin-bottom:14px;">
+      <div class="mw-card-head">
+        <div class="mw-card-title"><i class="fa-solid fa-clock-rotate-left"></i>Status history</div>
+        <div class="mw-card-meta">{{ history | length }} transition{{ 's' if history | length != 1 }}</div>
       </div>
+      {% if history %}
+      {% for item in history | reverse %}
+      <div class="mw-time-item {% if item.is_current %}current{% endif %}">
+        <div class="mw-time-dot"></div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);">
+            {{ item.entry.status.name }}
+            {% if item.is_current %}<span style="font-size:10px;color:var(--accent);font-weight:500;text-transform:uppercase;letter-spacing:.12em;margin-left:8px;">● current</span>{% endif %}
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;font-feature-settings:'tnum';">{{ item.entry.changed_at | fmt_dt }}</div>
+          {% if item.entry.note %}
+          <div style="font-size:12px;color:var(--text-2);margin-top:6px;background:var(--surface-2);padding:7px 10px;border-radius:6px;border-left:2px solid #d8d4c4;">{{ item.entry.note }}</div>
+          {% endif %}
+          {% if item.entry.changer %}
+          <div style="font-size:11px;color:var(--muted-2);margin-top:4px;"><i class="fa-solid fa-user" style="margin-right:4px;font-size:9px;"></i>{{ item.entry.changer.email.split('@')[0] }}</div>
+          {% endif %}
+          <span style="display:inline-block;font-size:11px;color:var(--muted);background:var(--border-soft);padding:1px 8px;border-radius:999px;margin-top:5px;font-feature-settings:'tnum';">⧗ {{ item.duration }}</span>
+        </div>
+      </div>
+      {% endfor %}
       {% else %}
-      <div class="text-center py-6 text-gray-400">
-        <i class="fa-solid fa-clock-rotate-left text-2xl mb-2"></i>
-        <p class="text-xs">No status history yet</p>
+      <div class="mw-empty" style="padding:30px 0;">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        <div class="title">No history yet</div>
       </div>
       {% endif %}
     </div>
 
-  </div>
+    <!-- Admin: Delete deal -->
+    {% if current_user.is_admin %}
+    <div style="padding-top:4px;">
+      <form method="POST" action="{{ url_for('deal_delete', deal_id=deal.id) }}"
+            onsubmit="return confirm('Delete deal «{{ deal.name }}»? This cannot be undone.')">
+        <button type="submit" class="mw-btn danger mw-btn-full" style="font-size:12px;">
+          <i class="fa-solid fa-trash"></i>Delete this deal
+        </button>
+      </form>
+    </div>
+    {% endif %}
+
+  </div><!-- /RIGHT -->
 </div>
+
+<!-- EDIT DEAL MODAL TEMPLATE -->
+<template id="edit-deal-tpl">
+  <style>
+    .ed-grid { display:grid; grid-template-columns:1fr 1.5fr; gap:20px; }
+    @media(max-width:640px){ .ed-grid { grid-template-columns:1fr; } }
+    .ed-error { display:none; background:#faf1ec; border:1px solid #e8d0c8; color:var(--red);
+                border-radius:8px; padding:10px 14px; font-size:12px; margin-bottom:14px; }
+    .ed-footer { display:flex; justify-content:flex-end; gap:10px; padding-top:16px;
+                 border-top:1px solid var(--border); margin-top:4px; }
+  </style>
+  <div id="ed-error" class="ed-error"></div>
+  <form id="ed-form" method="POST" action="{{ url_for('deal_edit', deal_id=deal.id) }}">
+    <input type="hidden" name="_modal" value="1">
+    <div class="ed-grid">
+
+      <!-- Left: general -->
+      <div>
+        <div class="mw-field">
+          <label class="mw-form-lbl">Deal name <span class="req">*</span></label>
+          <input type="text" name="name" id="ed-name" required value="{{ deal.name | e }}" class="mw-input">
+        </div>
+        <div class="mw-field">
+          <label class="mw-form-lbl">Dealer <span class="req">*</span></label>
+          <select name="installer_id" id="ed-dealer" required class="mw-input">
+            <option value="">— Select dealer —</option>
+            {% for inst in dealers %}
+            <option value="{{ inst.id }}" {% if deal.installer_id == inst.id %}selected{% endif %}>{{ inst.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mw-field">
+          <label class="mw-form-lbl">Status</label>
+          <select name="status_id" id="ed-status" class="mw-input">
+            {% for s in statuses %}
+            <option value="{{ s.id }}" {% if deal.current_status_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mw-field" style="margin-bottom:0;">
+          <label class="mw-form-lbl">Notes</label>
+          <textarea name="notes" rows="3" class="mw-input mw-textarea">{{ deal.notes or '' }}</textarea>
+        </div>
+      </div>
+
+      <!-- Right: financial -->
+      <div>
+        <div class="mw-card-head" style="margin-bottom:14px;">
+          <div class="mw-card-title" style="font-size:13px;"><i class="fa-solid fa-calculator"></i>Financial</div>
+          <div class="mw-seg">
+            <button type="button" id="ed-btn-rl-on"  onclick="edSetRedline(true)">
+              <i class="fa-solid fa-calculator" style="font-size:11px;"></i>Redline
+            </button>
+            <button type="button" id="ed-btn-rl-off" onclick="edSetRedline(false)">
+              <i class="fa-solid fa-dollar-sign" style="font-size:11px;"></i>Fixed
+            </button>
+          </div>
+        </div>
+        <input type="hidden" id="ed-use-redline" name="use_redline" value="{{ '1' if deal.use_redline else '0' }}">
+
+        <!-- Redline -->
+        <div id="ed-redline-fields">
+          <div class="mw-field-row" style="grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="mw-field">
+              <label class="mw-form-lbl">System size <span class="hint">(W)</span> <span class="req">*</span></label>
+              <input type="number" id="ed-ss" name="system_size" step="1" min="0"
+                     value="{{ deal.system_size or '' }}" oninput="edCalc()" class="mw-input mono">
+            </div>
+            <div class="mw-field">
+              <label class="mw-form-lbl">Company redline <span class="hint">($/W)</span> <span class="req">*</span></label>
+              <input type="number" id="ed-cr" name="company_redline" step="0.0001" min="0"
+                     value="{{ deal.company_redline or '' }}" oninput="edCalc()" class="mw-input mono">
+            </div>
+          </div>
+          <div class="mw-field-row" style="grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="mw-field">
+              <label class="mw-form-lbl">Adders <span class="hint">($)</span></label>
+              <input type="number" id="ed-ad" name="adders" step="0.01" min="0"
+                     value="{{ deal.adders or '0' }}" oninput="edCalc()" class="mw-input mono">
+            </div>
+            <div class="mw-field">
+              <label class="mw-form-lbl">Contract amount <span class="hint">($)</span> <span class="req">*</span></label>
+              <input type="number" id="ed-ca" name="contract_amount" step="0.01" min="0"
+                     value="{{ deal.contract_amount or '' }}" oninput="edCalc()" class="mw-input mono">
+            </div>
+          </div>
+          <div id="ed-preview" style="display:none;background:var(--green-soft);border:1px solid #cfe1c8;border-radius:10px;padding:12px 14px;font-size:12px;">
+            <div style="display:flex;gap:20px;flex-wrap:wrap;">
+              <div><div style="color:var(--muted);font-size:11px;">Commission</div><div id="ed-pc" style="font-weight:700;font-size:16px;">—</div></div>
+              <div><div style="color:var(--muted);font-size:11px;">Total PPW</div><div id="ed-pp" style="font-weight:600;">—</div></div>
+              <div><div style="color:var(--muted);font-size:11px;">Net PPW</div><div id="ed-pn" style="font-weight:600;">—</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fixed -->
+        <div id="ed-fixed-fields" style="display:none;">
+          <div class="mw-field" style="margin-bottom:0;">
+            <label class="mw-form-lbl">Total amount owed <span class="hint">($)</span> <span class="req">*</span></label>
+            <div class="mw-input-wrap">
+              <i class="left fa-solid fa-dollar-sign"></i>
+              <input type="number" id="ed-ao" name="amount_owed" step="0.01" min="0"
+                     value="{{ deal.amount_owed or '' }}" class="mw-input mono">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ed-footer">
+      <button type="button" onclick="mwModalClose()" class="mw-btn">Cancel</button>
+      <button type="submit" id="ed-submit" class="mw-btn accent">
+        <i class="fa-solid fa-floppy-disk"></i>Save changes
+      </button>
+    </div>
+  </form>
+</template>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
   const REMAINING = {{ deal.remaining_balance }};
-
   function updatePreview(val) {
     const v = parseFloat(val) || 0;
-    const preview = document.getElementById('balance-preview');
+    const el = document.getElementById('balance-preview');
     if (v > 0 && v <= REMAINING) {
       const after = Math.max(REMAINING - v, 0);
-      preview.textContent = `After payment: $${after.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})} remaining`;
-      preview.className = 'text-xs mt-1 ' + (after === 0 ? 'text-green-600 font-semibold' : 'text-gray-400');
+      el.textContent = 'After payment: $' + after.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' remaining';
+      el.style.color = after === 0 ? 'var(--accent)' : 'var(--muted-2)';
+      el.style.fontWeight = after === 0 ? '600' : '400';
     } else {
-      preview.textContent = '';
+      el.textContent = '';
     }
   }
+
+  // ── Edit deal modal ────────────────────────────────────────────────────────
+  function edSetRedline(on) {
+    const rl = document.getElementById('ed-use-redline');
+    if (!rl) return;
+    rl.value = on ? '1' : '0';
+    document.getElementById('ed-redline-fields').style.display = on ? '' : 'none';
+    document.getElementById('ed-fixed-fields').style.display   = on ? 'none' : '';
+    document.getElementById('ed-btn-rl-on').classList.toggle('active', on);
+    document.getElementById('ed-btn-rl-off').classList.toggle('active', !on);
+    ['ed-ss','ed-cr','ed-ca'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.required = on;
+    });
+    const ao = document.getElementById('ed-ao');
+    if (ao) ao.required = !on;
+    edCalc();
+  }
+
+  function edCalc() {
+    const ss = parseFloat(document.getElementById('ed-ss')?.value) || 0;
+    const cr = parseFloat(document.getElementById('ed-cr')?.value) || 0;
+    const ad = parseFloat(document.getElementById('ed-ad')?.value) || 0;
+    const ca = parseFloat(document.getElementById('ed-ca')?.value) || 0;
+    if (!ss || !ca) { const p = document.getElementById('ed-preview'); if(p) p.style.display='none'; return; }
+    const comm = ca - (ss * cr) - ad;
+    const fmt  = v => '$' + v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const fmtW = v => '$' + v.toFixed(4) + '/W';
+    document.getElementById('ed-pc').textContent = fmt(comm);
+    document.getElementById('ed-pc').style.color = comm >= 0 ? 'var(--accent)' : 'var(--red)';
+    document.getElementById('ed-pp').textContent = fmtW(ca / ss);
+    document.getElementById('ed-pn').textContent = fmtW((ca - ad) / ss);
+    document.getElementById('ed-preview').style.display = '';
+  }
+
+  document.addEventListener('submit', function (e) {
+    const form = e.target;
+    if (form.id !== 'ed-form') return;
+    e.preventDefault();
+    const btn    = document.getElementById('ed-submit');
+    const errBox = document.getElementById('ed-error');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+    errBox.style.display = 'none';
+
+    fetch(form.action, { method: 'POST', body: new FormData(form) })
+      .then(async r => {
+        const data = await r.json();
+        if (data.ok) {
+          mwModalClose();
+          window.location.reload();
+        } else {
+          errBox.textContent = data.error || 'Something went wrong.';
+          errBox.style.display = '';
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>Save changes';
+        }
+      })
+      .catch(() => { window.location.href = form.action.replace('?_modal=1',''); });
+  });
 </script>
 {% endblock %}

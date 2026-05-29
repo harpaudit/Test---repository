@@ -1,254 +1,876 @@
 {% extends "base.html" %}
-
-{% block title %}Dashboard — MOSES CRM{% endblock %}
-{% block page_title %}Dashboard{% endblock %}
-{% block page_subtitle %}<p class="text-xs text-gray-500 mt-0.5">Solar pipeline overview</p>{% endblock %}
-
-{% block header_actions %}
-<a href="{{ url_for('export_excel', installer_id=installer_filter, status_id=status_filter) }}"
-   class="btn-secondary text-xs">
-  <i class="fa-solid fa-file-excel text-green-600"></i> Export Excel
-</a>
-<a href="{{ url_for('deal_new') }}" class="btn-primary text-xs">
-  <i class="fa-solid fa-plus"></i> New Deal
-</a>
-{% endblock %}
+{% block title %}Overview — MOSES CRM{% endblock %}
 
 {% block content %}
+<style>
+  /* Dashboard-specific */
+  .dash-heading { display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:20px; gap:16px; }
+  .dash-greeting { font-size:26px; font-weight:600; color:var(--text); letter-spacing:-.02em; }
+  .dash-sub { font-size:13px; color:var(--muted); margin-top:2px; }
 
-{# ── KPI Cards ─────────────────────────────────────────────────────────────── #}
-<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  /* Hero card */
+  .dash-hero {
+    background:#fff; border:1px solid var(--border); border-radius:16px;
+    padding:24px 28px; display:grid; grid-template-columns:1fr 1.4fr;
+    gap:28px; margin-bottom:20px; align-items:stretch;
+  }
+  .dash-hero-left { display:flex; flex-direction:column; justify-content:space-between; }
+  .dash-hero-label { font-size:12px; color:var(--muted); font-weight:500; }
+  .dash-hero-value {
+    font-size:46px; font-weight:600; color:var(--text); letter-spacing:-.03em;
+    margin:8px 0 4px; font-feature-settings:'lnum','tnum'; line-height:1;
+  }
+  .dash-hero-delta {
+    display:inline-flex; align-items:center; gap:5px;
+    padding:3px 9px; background:var(--green-soft); color:#2a5a35;
+    font-size:11px; font-weight:600; border-radius:999px;
+  }
+  .dash-mini-kpis { display:flex; gap:24px; margin-top:18px; }
+  .dash-mini-label { font-size:11px; color:var(--muted-2); }
+  .dash-mini-value { font-size:18px; font-weight:600; color:var(--text); margin-top:3px; font-feature-settings:'lnum','tnum'; }
 
-  <div class="card p-5">
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Deals</span>
-      <div class="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-        <i class="fa-solid fa-handshake text-blue-600 text-sm"></i>
-      </div>
-    </div>
-    <p class="text-3xl font-bold text-gray-900">{{ total_deals }}</p>
-    <p class="text-xs text-gray-400 mt-1">registered in the system</p>
+  /* KPI grid */
+  .dash-kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px; }
+  @media(max-width:800px){ .dash-kpi-grid { grid-template-columns:repeat(2,1fr); } }
+  .dash-kpi-card {
+    background:#fff; border:1px solid var(--border); border-radius:14px;
+    padding:20px 22px; display:flex; flex-direction:column; gap:10px;
+  }
+  .dash-kpi-top { display:flex; align-items:center; justify-content:space-between; }
+  .dash-kpi-label { font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .dash-kpi-icon {
+    width:32px; height:32px; border-radius:8px; display:flex; align-items:center;
+    justify-content:center; font-size:13px; flex-shrink:0;
+  }
+  .dash-kpi-icon.blue  { background:#e8f0fe; color:#3b6fb5; }
+  .dash-kpi-icon.green { background:var(--green-soft); color:#2a5a35; }
+  .dash-kpi-icon.amber { background:#fef3c7; color:#92400e; }
+  .dash-kpi-icon.gray  { background:var(--surface-2); color:var(--muted); }
+  .dash-kpi-value { font-size:32px; font-weight:700; color:var(--text); letter-spacing:-.03em; font-feature-settings:'lnum','tnum'; line-height:1; }
+  .dash-kpi-value.green { color:var(--accent); }
+  .dash-kpi-sub { font-size:11px; color:var(--muted-2); }
+
+  /* Kanban */
+  .dash-board { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:12px; margin-bottom:24px; }
+  .dash-col { background:#fff; border:1px solid var(--border); border-radius:14px; overflow:hidden; display:flex; flex-direction:column; }
+  .dash-col-head { padding:12px 14px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border-soft); }
+  .dash-col-dot { width:10px; height:10px; border-radius:999px; flex-shrink:0; }
+  .dash-col-name { font-size:13px; font-weight:600; color:var(--text); }
+  .dash-col-count { margin-left:auto; font-size:11px; color:var(--muted); background:var(--bg); padding:2px 8px; border-radius:999px; font-weight:600; }
+  .dash-col-sum { padding:6px 14px 10px; font-size:11px; color:var(--muted); border-bottom:1px solid var(--border-soft); }
+  .dash-col-sum b { color:var(--text); font-weight:600; font-feature-settings:'lnum','tnum'; }
+  .dash-col-cards { padding:8px; display:flex; flex-direction:column; gap:6px; flex:1; }
+  .dash-deal-card { padding:10px 12px; background:var(--surface-2); border-radius:8px; border:1px solid var(--border-soft); text-decoration:none; display:block; transition:background .12s; }
+  .dash-deal-card:hover { background:#fff; border-color:#d8d4c4; }
+  .dash-deal-name { font-size:12px; color:var(--text); font-weight:500; line-height:1.3; }
+  .dash-deal-meta { display:flex; justify-content:space-between; margin-top:6px; font-size:11px; color:var(--muted); }
+  .dash-deal-val  { font-weight:600; color:var(--text); font-feature-settings:'lnum','tnum'; }
+  .dash-deal-prog { height:3px; background:var(--border); border-radius:999px; margin-top:6px; overflow:hidden; }
+  .dash-deal-prog div { height:100%; background:var(--accent); }
+
+  /* Bottom section */
+  .dash-bottom { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+  .dash-panel { background:#fff; border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+  .dash-panel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .dash-panel-title { font-size:14px; font-weight:600; color:var(--text); }
+
+  .dash-leader-row { display:grid; grid-template-columns:24px 1fr 90px 1fr 90px; gap:12px; align-items:center; padding:9px 0; border-bottom:1px solid var(--border-soft); }
+  .dash-leader-row:last-child { border-bottom:none; }
+  .dash-leader-rank { width:22px; height:22px; background:var(--bg); border-radius:6px; color:var(--muted); font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center; }
+  .dash-leader-name { font-size:13px; color:var(--text); font-weight:500; }
+  .dash-leader-sub  { font-size:11px; color:var(--muted); margin-top:1px; }
+  .dash-leader-num  { font-size:13px; color:var(--text); text-align:right; font-weight:600; font-feature-settings:'lnum','tnum'; }
+  .dash-leader-bar  { height:4px; background:var(--border-soft); border-radius:999px; overflow:hidden; }
+  .dash-leader-bar div { height:100%; background:linear-gradient(90deg,var(--accent),#5a8a6a); }
+
+  .dash-tile { padding:14px 16px; background:var(--surface-2); border-radius:10px; border:1px solid var(--border-soft); }
+  .dash-tile + .dash-tile { margin-top:10px; }
+  .dash-tile-label { font-size:11px; color:var(--muted); }
+  .dash-tile-value { font-size:22px; font-weight:600; color:var(--text); margin-top:4px; font-feature-settings:'lnum','tnum'; letter-spacing:-.01em; }
+
+  /* Full deals table */
+  .dash-section-head { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:10px; }
+  .dash-section-title { font-size:14px; font-weight:600; color:var(--text); }
+  .dash-filters { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .dash-select {
+    background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+    padding:6px 10px; font-size:12px; color:var(--text); cursor:pointer;
+    font-family:'Inter',sans-serif;
+  }
+  .dash-select:focus { outline:none; border-color:var(--accent); }
+  .dash-actions { display:flex; align-items:center; gap:6px; }
+
+  /* Color → dot mapping */
+  .dot-green  { background:#3f6651; }
+  .dot-blue   { background:#4f7a9a; }
+  .dot-yellow { background:#c4a050; }
+  .dot-gray   { background:#a4a895; }
+  .dot-red    { background:#b8533a; }
+  .dot-purple { background:#7b5ea7; }
+  .dot-orange { background:#c4a050; }
+</style>
+
+<!-- Page heading -->
+<div class="dash-heading">
+  <div>
+    <div class="dash-greeting">Good {{ 'morning' if current_dt.hour < 12 else ('afternoon' if current_dt.hour < 18 else 'evening') }}, {{ current_user.email.split('@')[0].title() }}</div>
+    <div class="dash-sub">Here's how the pipeline is moving — {{ current_dt.strftime('%B %d, %Y') }}.</div>
   </div>
-
-  <div class="card p-5">
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Pipeline</span>
-      <div class="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-        <i class="fa-solid fa-arrow-trend-up text-blue-600 text-sm"></i>
-      </div>
-    </div>
-    <p class="text-3xl font-bold text-gray-900">{{ total_pipeline | currency }}</p>
-    <p class="text-xs text-gray-400 mt-1">remaining balance across all deals</p>
-  </div>
-
-  <div class="card p-5 border-green-200 bg-gradient-to-br from-white to-green-50">
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-xs font-semibold text-green-700 uppercase tracking-wider">Total Collected</span>
-      <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-        <i class="fa-solid fa-circle-check text-green-600 text-sm"></i>
-      </div>
-    </div>
-    <p class="text-3xl font-bold text-green-700">{{ total_collected | currency }}</p>
-    <p class="text-xs text-green-500 mt-1">payments received</p>
-  </div>
-
-  <div class="card p-5">
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Pending</span>
-      <div class="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center">
-        <i class="fa-solid fa-clock text-red-500 text-sm"></i>
-      </div>
-    </div>
-    <p class="text-3xl font-bold text-gray-900">{{ unpaid_count }}</p>
-    <p class="text-xs text-gray-400 mt-1">deals not yet completed</p>
+  <div style="display:flex;gap:8px;">
+    <a href="{{ url_for('export_excel', installer_id=installer_filter, status_id=status_filter) }}" class="mw-btn sm">
+      <i class="fa-solid fa-file-excel" style="color:#16a34a;"></i>Export Excel
+    </a>
   </div>
 </div>
 
-{# ── Status pills ─────────────────────────────────────────────────────────── #}
-{% if status_kpis %}
-<div class="flex gap-3 mb-6 flex-wrap">
-  {% for sk in status_kpis %}
-  <div class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm {{ sk.color | status_badge }}">
-    <span class="w-2 h-2 rounded-full {{ sk.color | status_dot }}"></span>
-    <span class="font-medium">{{ sk.name }}</span>
-    <span class="font-bold">{{ sk.count }}</span>
+<!-- KPI CARDS -->
+<div class="dash-kpi-grid">
+  <div class="dash-kpi-card">
+    <div class="dash-kpi-top">
+      <div class="dash-kpi-label">Total Deals</div>
+      <div class="dash-kpi-icon blue"><i class="fa-solid fa-handshake"></i></div>
+    </div>
+    <div class="dash-kpi-value">{{ total_deals }}</div>
+    <div class="dash-kpi-sub">registered in the system</div>
   </div>
-  {% endfor %}
+  <div class="dash-kpi-card">
+    <div class="dash-kpi-top">
+      <div class="dash-kpi-label">Pipeline</div>
+      <div class="dash-kpi-icon blue"><i class="fa-solid fa-arrow-trend-up"></i></div>
+    </div>
+    <div class="dash-kpi-value">{{ total_pipeline | currency }}</div>
+    <div class="dash-kpi-sub">balance across active deals</div>
+  </div>
+  <div class="dash-kpi-card">
+    <div class="dash-kpi-top">
+      <div class="dash-kpi-label">Total Collected</div>
+      <div class="dash-kpi-icon green"><i class="fa-solid fa-circle-check"></i></div>
+    </div>
+    <div class="dash-kpi-value green">{{ total_collected | currency }}</div>
+    <div class="dash-kpi-sub">payments received</div>
+  </div>
+  <div class="dash-kpi-card">
+    <div class="dash-kpi-top">
+      <div class="dash-kpi-label">Pending</div>
+      <div class="dash-kpi-icon amber"><i class="fa-solid fa-clock"></i></div>
+    </div>
+    <div class="dash-kpi-value">{{ unpaid_count }}</div>
+    <div class="dash-kpi-sub">deals not yet completed</div>
+  </div>
 </div>
-{% endif %}
 
-{# ── Dealer breakdown ─────────────────────────────────────────────────────── #}
-{% if dealer_kpis %}
-<div class="card mb-6 overflow-hidden">
-  <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-    <h2 class="text-sm font-semibold text-gray-700">Pipeline by Dealer</h2>
-    <span class="text-xs text-gray-400">Remaining balance — highest first</span>
-  </div>
-  <div class="overflow-x-auto">
-    <table class="w-full">
-      <thead>
-        <tr class="bg-gray-50 text-left">
-          <th class="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Dealer</th>
-          <th class="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Deals</th>
-          <th class="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Remaining</th>
-          <th class="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Collected</th>
-          <th class="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider w-40"></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% set max_total = dealer_kpis[0].total if dealer_kpis else 1 %}
-        {% for ki in dealer_kpis %}
-        <tr class="table-row">
-          <td class="px-5 py-3 text-sm">
+
+<!-- BOTTOM: Dealer Leaderboard + All deals (side by side) -->
+<div class="dash-bottom" style="margin-top:20px;">
+
+  <!-- Left column: Top dealers + Pipeline by status -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+
+    <!-- Dealer Leaderboard -->
+    <div class="dash-panel">
+      <div class="dash-panel-head">
+        <div class="dash-panel-title">Top dealers</div>
+        <a href="{{ url_for('dealers_list') }}" class="mw-btn sm ghost">View all →</a>
+      </div>
+      {% if dealer_kpis %}
+      {% set max_total = dealer_kpis[0].total if dealer_kpis else 1 %}
+      {% for ki in dealer_kpis[:6] %}
+      <div class="dash-leader-row">
+        <span class="dash-leader-rank">{{ loop.index }}</span>
+        <div>
+          <div class="dash-leader-name">
             <a href="{{ url_for('dealer_detail', dealer_id=ki.id) }}"
-               class="font-medium text-gray-800 hover:text-blue-600 transition-colors">
-              {{ ki.name }}
-            </a>
-          </td>
-          <td class="px-5 py-3 text-right text-gray-600 text-sm">{{ ki.count }}</td>
-          <td class="px-5 py-3 text-right font-bold text-gray-800 text-sm">{{ ki.total | currency }}</td>
-          <td class="px-5 py-3 text-right font-semibold text-green-600 text-sm">{{ ki.collected | currency }}</td>
-          <td class="px-5 py-3">
-            <div class="w-full bg-gray-100 rounded-full h-1.5">
-              <div class="bg-blue-500 h-1.5 rounded-full"
-                   style="width: {{ [(ki.total / max_total * 100) if max_total > 0 else 0, 100] | min }}%"></div>
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-{% endif %}
-
-{# ── Deals Table ──────────────────────────────────────────────────────────── #}
-<div class="card">
-  <div class="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center gap-3">
-    <h2 class="text-sm font-semibold text-gray-700 mr-auto">Deals</h2>
-    <form method="GET" action="{{ url_for('dashboard') }}" class="flex items-center gap-2 flex-wrap">
-      <select name="installer_id" onchange="this.form.submit()"
-              class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 bg-white focus:outline-none focus:border-blue-400">
-        <option value="">All dealers</option>
-        {% for inst in dealers %}
-        <option value="{{ inst.id }}" {% if installer_filter == inst.id | string %}selected{% endif %}>
-          {{ inst.name }}
-        </option>
-        {% endfor %}
-      </select>
-      <select name="status_id" onchange="this.form.submit()"
-              class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 bg-white focus:outline-none focus:border-blue-400">
-        <option value="">All statuses</option>
-        {% for s in statuses %}
-        <option value="{{ s.id }}" {% if status_filter == s.id | string %}selected{% endif %}>
-          {{ s.name }}
-        </option>
-        {% endfor %}
-      </select>
-      {% if installer_filter or status_filter %}
-      <a href="{{ url_for('dashboard') }}" class="text-xs text-red-500 hover:text-red-700 font-medium">
-        <i class="fa-solid fa-xmark"></i> Clear
-      </a>
+               style="color:inherit;text-decoration:none;">{{ ki.name }}</a>
+          </div>
+          <div class="dash-leader-sub">{{ ki.count }} deal{{ 's' if ki.count != 1 }}</div>
+        </div>
+        <div class="dash-leader-num">{{ ki.total | currency }}</div>
+        <div class="dash-leader-bar">
+          <div style="width:{{ [(ki.total / max_total * 100) if max_total > 0 else 0, 100] | min | round }}%;"></div>
+        </div>
+        <div class="dash-leader-num" style="color:var(--accent);">{{ ki.collected | currency }}</div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div style="text-align:center;padding:24px 0;font-size:12px;color:var(--muted-2);">No dealer data yet</div>
       {% endif %}
-    </form>
+    </div>
+
+    <!-- Pipeline by status -->
+    {% if status_kpis %}
+    <div class="dash-panel">
+      <div class="dash-panel-head">
+        <div class="dash-panel-title">Pipeline by status</div>
+      </div>
+      {% for sk in status_kpis %}
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border-soft);">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="mw-chip {{ sk.color | mw_chip }}" style="padding:3px 10px;">
+            <span class="dot" style="background:{{ sk.color | mw_dot }};"></span>
+            {{ sk.name }}
+          </span>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <span style="font-size:12px;color:var(--muted);">{{ sk.count }} deal{{ 's' if sk.count != 1 }}</span>
+          <a href="{{ url_for('dashboard', status_id=sk.id) }}" data-page-link
+             style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:500;">Filter →</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
   </div>
 
-  <div class="overflow-x-auto">
-    {% if deals %}
-    <table class="w-full">
-      <thead>
-        <tr class="bg-gray-50 text-left border-b border-gray-100">
-          <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">#</th>
-          <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Deal</th>
-          <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Dealer</th>
-          <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-          <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Original</th>
-          <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Paid</th>
-          <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Remaining</th>
-          <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Created</th>
-          <th class="px-5 py-3"></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for deal in deals %}
-        <tr class="table-row">
-          <td class="px-5 py-3.5 text-xs text-gray-400 font-mono">{{ deal.id }}</td>
-          <td class="px-5 py-3.5">
-            <a href="{{ url_for('deal_detail', deal_id=deal.id) }}"
-               class="font-semibold text-sm text-gray-800 hover:text-blue-600 transition-colors">
-              {{ deal.name }}
-            </a>
-          </td>
-          <td class="px-5 py-3.5 text-sm text-gray-600">{{ deal.dealer.name if deal.dealer else '—' }}</td>
-          <td class="px-5 py-3.5">
-            {% if deal.current_status %}
-            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold
-                         {{ deal.current_status.color | status_badge }}">
-              <span class="w-1.5 h-1.5 rounded-full {{ deal.current_status.color | status_dot }}"></span>
-              {{ deal.current_status.name }}
-            </span>
-            {% else %}
-            <span class="text-gray-400 text-xs">—</span>
-            {% endif %}
-          </td>
-          <td class="px-5 py-3.5 text-right text-sm text-gray-600">{{ deal.original_value | currency }}</td>
-          <td class="px-5 py-3.5 text-right text-sm font-semibold text-green-600">
-            {% if (deal.amount_paid or 0) > 0 %}{{ deal.amount_paid | currency }}{% else %}—{% endif %}
-          </td>
-          <td class="px-5 py-3.5 text-right font-bold text-sm text-gray-900">
-            {{ deal.remaining_balance | currency }}
-          </td>
-          <td class="px-5 py-3.5 text-xs text-gray-500">{{ deal.created_at | fmt_dt }}</td>
-          <td class="px-5 py-3.5">
-            <div class="flex items-center gap-1">
-              <a href="{{ url_for('deal_detail', deal_id=deal.id) }}"
-                 class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View">
-                <i class="fa-solid fa-eye text-sm"></i>
+  <!-- All deals -->
+  <div class="mw-table-card" id="deals-table">
+  <div class="dash-section-head">
+    <div class="dash-section-title">All deals</div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <form method="GET" action="{{ url_for('dashboard') }}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <select name="installer_id" onchange="this.form.submit()" class="dash-select">
+          <option value="">All dealers</option>
+          {% for inst in dealers %}
+          <option value="{{ inst.id }}" {{ 'selected' if installer_filter == inst.id | string }}>{{ inst.name }}</option>
+          {% endfor %}
+        </select>
+        <select name="status_id" onchange="this.form.submit()" class="dash-select">
+          <option value="">All statuses</option>
+          {% for s in statuses %}
+          <option value="{{ s.id }}" {{ 'selected' if status_filter == s.id | string }}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+        <select name="per_page" onchange="this.form.submit()" class="dash-select">
+          <option value="10"  {{ 'selected' if per_page == 10  else '' }}>10 / page</option>
+          <option value="20"  {{ 'selected' if per_page == 20  else '' }}>20 / page</option>
+          <option value="50"  {{ 'selected' if per_page == 50  else '' }}>50 / page</option>
+        </select>
+        {% if installer_filter or status_filter or sort != 'created' or direction != 'desc' %}
+        <a href="{{ url_for('dashboard', per_page=per_page) }}" class="mw-btn sm danger" data-page-link>
+          <i class="fa-solid fa-xmark"></i>Clear
+        </a>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+
+  {% if deals %}
+  <style>
+    /* Kebab dropdown */
+  .kb-wrap { position:relative; display:inline-block; }
+  .kb-btn {
+    width:28px; height:28px; border-radius:6px; border:none; background:transparent;
+    cursor:pointer; color:var(--muted-2); font-size:14px; display:flex;
+    align-items:center; justify-content:center; transition:background .12s;
+  }
+  .kb-btn:hover { background:var(--border-soft); color:var(--text); }
+  .kb-menu {
+    display:none; position:absolute; right:0; top:32px; z-index:200;
+    background:#fff; border:1px solid var(--border); border-radius:10px;
+    box-shadow:0 8px 24px rgba(0,0,0,.12); min-width:140px; overflow:hidden;
+  }
+  .kb-wrap:focus-within .kb-menu { display:block; }
+  .kb-menu a, .kb-menu button {
+    display:flex; align-items:center; gap:9px; width:100%; padding:9px 14px;
+    font-size:12px; font-weight:500; color:var(--text); text-decoration:none;
+    background:transparent; border:none; cursor:pointer; text-align:left;
+    transition:background .1s;
+  }
+  .kb-menu a:hover, .kb-menu button:hover { background:var(--surface-2); }
+  .kb-menu .kb-danger { color:var(--red); }
+  .kb-menu .kb-danger:hover { background:#faf1ec; }
+  .kb-sep { height:1px; background:var(--border-soft); margin:3px 0; }
+
+  .sort-th { cursor:pointer; user-select:none; white-space:nowrap; }
+    .sort-th:hover { color:var(--text); }
+    .sort-arrow { font-size:10px; margin-left:4px; opacity:.4; }
+    .sort-th.active .sort-arrow { opacity:1; color:var(--accent); }
+  </style>
+  {% macro sort_url(col) %}{{ url_for('dashboard', installer_id=installer_filter, status_id=status_filter, per_page=per_page, page=1, sort=col, dir=('asc' if (sort == col and direction == 'desc') else 'desc')) }}{% endmacro %}
+  {% macro sort_icon(col) %}<span class="sort-arrow">{% if sort == col %}{{ '↑' if direction == 'asc' else '↓' }}{% else %}↕{% endif %}</span>{% endmacro %}
+  <table class="mw-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Deal</th>
+        <th>Dealer</th>
+        <th>Status</th>
+        <th class="num sort-th {{ 'active' if sort == 'original' }}">
+          <a href="{{ sort_url('original') }}" data-page-link style="color:inherit;text-decoration:none;display:flex;align-items:center;justify-content:flex-end;gap:2px;">Original{{ sort_icon('original') }}</a>
+        </th>
+        <th class="num">Paid</th>
+        <th class="num sort-th {{ 'active' if sort == 'remaining' }}">
+          <a href="{{ sort_url('remaining') }}" data-page-link style="color:inherit;text-decoration:none;display:flex;align-items:center;justify-content:flex-end;gap:2px;">Remaining{{ sort_icon('remaining') }}</a>
+        </th>
+        <th class="sort-th {{ 'active' if sort == 'created' }}">
+          <a href="{{ sort_url('created') }}" data-page-link style="color:inherit;text-decoration:none;display:flex;align-items:center;gap:2px;">Created{{ sort_icon('created') }}</a>
+        </th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for deal in deals %}
+      <tr>
+        <td class="id">{{ deal.id }}</td>
+        <td>
+          <a href="{{ url_for('deal_detail', deal_id=deal.id) }}"
+             style="font-weight:500;color:var(--text);text-decoration:none;">
+            {{ deal.name }}
+          </a>
+        </td>
+        <td style="color:var(--muted);">{{ deal.dealer.name if deal.dealer else '—' }}</td>
+        <td>
+          {% if deal.current_status %}
+          <span class="mw-chip {{ deal.current_status.color | mw_chip }}">
+            <span class="dot" style="background:{{ deal.current_status.color | mw_dot }};"></span>
+            {{ deal.current_status.name }}
+          </span>
+          {% else %}<span style="color:var(--muted-2);font-size:12px;">—</span>{% endif %}
+        </td>
+        <td class="num">{{ deal.original_value | currency }}</td>
+        <td class="num" style="color:{{ 'var(--accent)' if (deal.amount_paid or 0) > 0 else 'var(--muted-2)' }};">
+          {% if (deal.amount_paid or 0) > 0 %}{{ deal.amount_paid | currency }}{% else %}—{% endif %}
+        </td>
+        <td class="num" style="font-weight:600;">{{ deal.remaining_balance | currency }}</td>
+        <td style="font-size:12px;color:var(--muted);">{{ deal.created_at | fmt_dt }}</td>
+        <td style="width:36px;">
+          <div class="kb-wrap" tabindex="0">
+            <button class="kb-btn" type="button" title="Actions">
+              <i class="fa-solid fa-ellipsis-vertical"></i>
+            </button>
+            <div class="kb-menu">
+              <a href="{{ url_for('deal_detail', deal_id=deal.id) }}">
+                <i class="fa-solid fa-eye" style="width:13px;"></i>View
               </a>
               {% if current_user.is_admin %}
-              <a href="{{ url_for('deal_edit', deal_id=deal.id) }}"
-                 class="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Edit">
-                <i class="fa-solid fa-pen text-sm"></i>
+              <a href="#" onclick="event.preventDefault(); openEditModal({{ deal.id }})">
+                <i class="fa-solid fa-pen" style="width:13px;"></i>Edit
               </a>
+              <div class="kb-sep"></div>
               <form method="POST" action="{{ url_for('deal_delete', deal_id=deal.id) }}"
-                    onsubmit="return confirm('Delete deal «{{ deal.name }}»? This cannot be undone.')">
-                <button type="submit" class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
-                  <i class="fa-solid fa-trash text-sm"></i>
+                    onsubmit="return confirm('Delete deal «{{ deal.name | e }}»? Cannot be undone.')">
+                <button type="submit" class="kb-danger">
+                  <i class="fa-solid fa-trash" style="width:13px;"></i>Delete
                 </button>
               </form>
               {% endif %}
             </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
-    <div class="flex flex-col items-center justify-center py-16 text-gray-400">
-      <i class="fa-solid fa-inbox text-4xl mb-3"></i>
-      <p class="text-sm font-medium">No deals to show</p>
-      <p class="text-xs mt-1">
-        {% if installer_filter or status_filter %}Try adjusting the filters.
-        {% else %}Create your first deal to get started.{% endif %}
-      </p>
-      {% if not installer_filter and not status_filter %}
-      <a href="{{ url_for('deal_new') }}" class="btn-primary mt-4 text-xs">
-        <i class="fa-solid fa-plus"></i> New Deal
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div style="padding:12px 16px;border-top:1px solid var(--border-soft);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+    <!-- Left: count info -->
+    <span style="font-size:12px;color:var(--muted);">
+      Showing {{ (pagination.page - 1) * per_page + 1 }}–{{ [(pagination.page * per_page), pagination.total] | min }}
+      of {{ pagination.total }} deal{{ 's' if pagination.total != 1 }}
+    </span>
+
+    <!-- Center: page buttons -->
+    {% if pagination.pages > 1 %}
+    <div style="display:flex;align-items:center;gap:4px;">
+      <a href="{{ url_for('dashboard', installer_id=installer_filter, status_id=status_filter, per_page=per_page, sort=sort, dir=direction, page=pagination.prev_num) }}"
+         class="mw-btn sm ghost" data-page-link
+         style="{{ 'opacity:.35;pointer-events:none;' if not pagination.has_prev }}">
+        <i class="fa-solid fa-chevron-left"></i>
       </a>
-      {% endif %}
+      {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+        {% if p %}
+          <a href="{{ url_for('dashboard', installer_id=installer_filter, status_id=status_filter, per_page=per_page, sort=sort, dir=direction, page=p) }}"
+             class="mw-btn sm {{ 'primary' if p == pagination.page else 'ghost' }}"
+             style="min-width:32px;justify-content:center;" data-page-link>{{ p }}</a>
+        {% else %}
+          <span style="font-size:12px;color:var(--muted-2);padding:0 4px;">…</span>
+        {% endif %}
+      {% endfor %}
+      <a href="{{ url_for('dashboard', installer_id=installer_filter, status_id=status_filter, per_page=per_page, sort=sort, dir=direction, page=pagination.next_num) }}"
+         class="mw-btn sm ghost" data-page-link
+         style="{{ 'opacity:.35;pointer-events:none;' if not pagination.has_next }}">
+        <i class="fa-solid fa-chevron-right"></i>
+      </a>
     </div>
     {% endif %}
-  </div>
 
-  {% if deals %}
-  <div class="px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
-    <span class="text-xs text-gray-500">{{ deals | length }} deal(s) shown</span>
+    <!-- Right: export -->
     <a href="{{ url_for('export_excel', installer_id=installer_filter, status_id=status_filter) }}"
-       class="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1">
-      <i class="fa-solid fa-download"></i> Export current view
+       style="font-size:12px;color:var(--accent);text-decoration:none;font-weight:500;display:inline-flex;align-items:center;gap:5px;">
+      <i class="fa-solid fa-download"></i>Export current view
     </a>
+  </div>
+  {% else %}
+  <div class="mw-empty">
+    <i class="fa-solid fa-inbox"></i>
+    <div class="title">No deals to show</div>
+    <div class="sub">
+      {% if installer_filter or status_filter %}Try adjusting the filters.
+      {% else %}Create your first deal to get started.{% endif %}
+    </div>
+    {% if not installer_filter and not status_filter %}
+    <a href="{{ url_for('deal_new') }}" class="mw-btn primary" style="margin-top:16px;">
+      <i class="fa-solid fa-plus"></i>New Deal
+    </a>
+    {% endif %}
   </div>
   {% endif %}
 </div>
 
+</div>
+
+<!-- EDIT DEAL MODAL TEMPLATE -->
+<template id="edit-deal-dash-tpl">
+  <style>
+    .ed-grid { display:grid; grid-template-columns:1fr 1.5fr; gap:20px; }
+    @media(max-width:640px){ .ed-grid { grid-template-columns:1fr; } }
+    .ed-error { display:none; background:#faf1ec; border:1px solid #e8d0c8; color:var(--red);
+                border-radius:8px; padding:10px 14px; font-size:12px; margin-bottom:14px; }
+    .ed-footer { display:flex; justify-content:flex-end; gap:10px; padding-top:16px;
+                 border-top:1px solid var(--border); margin-top:4px; }
+  </style>
+  <div id="ed-error" class="ed-error"></div>
+  <form id="ed-form" method="POST" action="">
+    <input type="hidden" name="_modal" value="1">
+    <div class="ed-grid">
+      <div>
+        <div class="mw-field">
+          <label class="mw-form-lbl">Deal name <span class="req">*</span></label>
+          <input type="text" name="name" id="ed-name" required class="mw-input">
+        </div>
+        <div class="mw-field">
+          <label class="mw-form-lbl">Dealer <span class="req">*</span></label>
+          <select name="installer_id" id="ed-dealer" required class="mw-input">
+            <option value="">— Select dealer —</option>
+            {% for inst in dealers %}
+            <option value="{{ inst.id }}">{{ inst.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mw-field">
+          <label class="mw-form-lbl">Status</label>
+          <select name="status_id" id="ed-status" class="mw-input">
+            {% for s in statuses %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mw-field" style="margin-bottom:0;">
+          <label class="mw-form-lbl">Notes</label>
+          <textarea name="notes" id="ed-notes" rows="3" class="mw-input mw-textarea"></textarea>
+        </div>
+      </div>
+      <div>
+        <div class="mw-card-head" style="margin-bottom:14px;">
+          <div class="mw-card-title" style="font-size:13px;"><i class="fa-solid fa-calculator"></i>Financial</div>
+          <div class="mw-seg">
+            <button type="button" id="ed-btn-rl-on"  onclick="edSetRedline(true)"><i class="fa-solid fa-calculator" style="font-size:11px;"></i>Redline</button>
+            <button type="button" id="ed-btn-rl-off" onclick="edSetRedline(false)"><i class="fa-solid fa-dollar-sign" style="font-size:11px;"></i>Fixed</button>
+          </div>
+        </div>
+        <input type="hidden" id="ed-use-redline" name="use_redline" value="1">
+        <div id="ed-redline-fields">
+          <div class="mw-field-row" style="grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="mw-field">
+              <label class="mw-form-lbl">System size <span class="hint">(W)</span></label>
+              <input type="number" id="ed-ss" name="system_size" step="1" min="0" oninput="edCalc()" class="mw-input mono">
+            </div>
+            <div class="mw-field">
+              <label class="mw-form-lbl">Company redline <span class="hint">($/W)</span></label>
+              <input type="number" id="ed-cr" name="company_redline" step="0.0001" min="0" oninput="edCalc()" class="mw-input mono">
+            </div>
+          </div>
+          <div class="mw-field-row" style="grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="mw-field">
+              <label class="mw-form-lbl">Adders <span class="hint">($)</span></label>
+              <input type="number" id="ed-ad" name="adders" step="0.01" min="0" value="0" oninput="edCalc()" class="mw-input mono">
+            </div>
+            <div class="mw-field">
+              <label class="mw-form-lbl">Contract amount <span class="hint">($)</span></label>
+              <input type="number" id="ed-ca" name="contract_amount" step="0.01" min="0" oninput="edCalc()" class="mw-input mono">
+            </div>
+          </div>
+          <div id="ed-preview" style="display:none;background:var(--green-soft);border:1px solid #cfe1c8;border-radius:10px;padding:12px 14px;">
+            <div style="display:flex;gap:20px;flex-wrap:wrap;">
+              <div><div style="color:var(--muted);font-size:11px;">Commission</div><div id="ed-pc" style="font-weight:700;font-size:16px;">—</div></div>
+              <div><div style="color:var(--muted);font-size:11px;">Total PPW</div><div id="ed-pp" style="font-weight:600;">—</div></div>
+              <div><div style="color:var(--muted);font-size:11px;">Net PPW</div><div id="ed-pn" style="font-weight:600;">—</div></div>
+            </div>
+          </div>
+        </div>
+        <div id="ed-fixed-fields" style="display:none;">
+          <div class="mw-field" style="margin-bottom:0;">
+            <label class="mw-form-lbl">Total amount owed <span class="hint">($)</span></label>
+            <div class="mw-input-wrap">
+              <i class="left fa-solid fa-dollar-sign"></i>
+              <input type="number" id="ed-ao" name="amount_owed" step="0.01" min="0" class="mw-input mono">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ed-footer">
+      <button type="button" onclick="mwModalClose()" class="mw-btn">Cancel</button>
+      <button type="submit" id="ed-submit" class="mw-btn accent">
+        <i class="fa-solid fa-floppy-disk"></i>Save changes
+      </button>
+    </div>
+  </form>
+</template>
+
+<!-- NEW DEAL MODAL TEMPLATE (hidden, pre-rendered with context data) -->
+<template id="new-deal-tpl">
+  <style>
+    .nd-grid { display:grid; grid-template-columns:1fr 1.5fr; gap:20px; }
+    @media(max-width:640px){ .nd-grid { grid-template-columns:1fr; } }
+    .nd-error { display:none; background:#faf1ec; border:1px solid #e8d0c8; color:var(--red);
+                border-radius:8px; padding:10px 14px; font-size:12px; margin-bottom:14px; }
+    .nd-footer { display:flex; justify-content:flex-end; gap:10px; padding-top:16px;
+                 border-top:1px solid var(--border); margin-top:4px; }
+  </style>
+  <div id="nd-error" class="nd-error"></div>
+  <form id="nd-form" method="POST" action="{{ url_for('deal_new') }}">
+    <input type="hidden" name="_modal" value="1">
+    <div class="nd-grid">
+
+      <!-- Left: general -->
+      <div>
+        <div class="mw-field">
+          <label class="mw-form-lbl">Deal name <span class="req">*</span></label>
+          <input type="text" name="name" id="nd-name" required
+                 placeholder="e.g. Smith Residence — 10 kW" class="mw-input">
+        </div>
+        <div class="mw-field">
+          <label class="mw-form-lbl">Dealer <span class="req">*</span></label>
+          <select name="installer_id" id="nd-dealer" required class="mw-input">
+            <option value="">— Select dealer —</option>
+            {% for inst in dealers %}
+            <option value="{{ inst.id }}">{{ inst.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mw-field">
+          <label class="mw-form-lbl">Initial status</label>
+          <select name="status_id" id="nd-status" class="mw-input">
+            {% for s in statuses %}
+            <option value="{{ s.id }}" {% if loop.first %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mw-field" style="margin-bottom:0;">
+          <label class="mw-form-lbl">Notes</label>
+          <textarea name="notes" rows="3" placeholder="Optional comments…"
+                    class="mw-input mw-textarea"></textarea>
+        </div>
+      </div>
+
+      <!-- Right: financial -->
+      <div>
+        <div class="mw-card-head" style="margin-bottom:14px;">
+          <div class="mw-card-title" style="font-size:13px;"><i class="fa-solid fa-calculator"></i>Financial</div>
+          <div class="mw-seg">
+            <button type="button" id="nd-btn-rl-on" onclick="ndSetRedline(true)">
+              <i class="fa-solid fa-calculator" style="font-size:11px;"></i>Redline
+            </button>
+            <button type="button" id="nd-btn-rl-off" onclick="ndSetRedline(false)">
+              <i class="fa-solid fa-dollar-sign" style="font-size:11px;"></i>Fixed
+            </button>
+          </div>
+        </div>
+        <input type="hidden" id="nd-use-redline" name="use_redline" value="1">
+
+        <!-- Redline -->
+        <div id="nd-redline-fields">
+          <div class="mw-field-row" style="grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="mw-field">
+              <label class="mw-form-lbl">System size <span class="hint">(W)</span> <span class="req">*</span></label>
+              <input type="number" id="nd-ss" name="system_size" step="1" min="0"
+                     placeholder="8000" oninput="ndCalc()" class="mw-input mono">
+            </div>
+            <div class="mw-field">
+              <label class="mw-form-lbl">Company redline <span class="hint">($/W)</span> <span class="req">*</span></label>
+              <input type="number" id="nd-cr" name="company_redline" step="0.0001" min="0"
+                     placeholder="0.0000" oninput="ndCalc()" class="mw-input mono">
+            </div>
+          </div>
+          <div class="mw-field-row" style="grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="mw-field">
+              <label class="mw-form-lbl">Adders <span class="hint">($)</span></label>
+              <input type="number" id="nd-ad" name="adders" step="0.01" min="0"
+                     value="0" oninput="ndCalc()" class="mw-input mono">
+            </div>
+            <div class="mw-field">
+              <label class="mw-form-lbl">Contract amount <span class="hint">($)</span> <span class="req">*</span></label>
+              <input type="number" id="nd-ca" name="contract_amount" step="0.01" min="0"
+                     placeholder="0.00" oninput="ndCalc()" class="mw-input mono">
+            </div>
+          </div>
+          <div id="nd-preview" style="display:none;background:var(--green-soft);border:1px solid #cfe1c8;border-radius:10px;padding:12px 14px;font-size:12px;">
+            <div style="display:flex;gap:20px;flex-wrap:wrap;">
+              <div><div style="color:var(--muted);font-size:11px;">Commission</div><div id="nd-pc" style="font-weight:700;color:var(--accent);font-size:16px;">—</div></div>
+              <div><div style="color:var(--muted);font-size:11px;">Total PPW</div><div id="nd-pp" style="font-weight:600;color:var(--text);">—</div></div>
+              <div><div style="color:var(--muted);font-size:11px;">Net PPW</div><div id="nd-pn" style="font-weight:600;color:var(--text);">—</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fixed -->
+        <div id="nd-fixed-fields" style="display:none;">
+          <div class="mw-field" style="margin-bottom:0;">
+            <label class="mw-form-lbl">Total amount owed <span class="hint">($)</span> <span class="req">*</span></label>
+            <div class="mw-input-wrap">
+              <i class="left fa-solid fa-dollar-sign"></i>
+              <input type="number" id="nd-ao" name="amount_owed" step="0.01" min="0"
+                     placeholder="0.00" class="mw-input mono">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nd-footer">
+      <button type="button" onclick="mwModalClose()" class="mw-btn">Cancel</button>
+      <button type="submit" id="nd-submit" class="mw-btn accent">
+        <i class="fa-solid fa-plus"></i>Create deal
+      </button>
+    </div>
+  </form>
+</template>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // ── Edit-deal modal (from kebab menu) ────────────────────────────────────
+  function edSetRedline(on) {
+    const rl = document.getElementById('ed-use-redline');
+    if (!rl) return;
+    rl.value = on ? '1' : '0';
+    document.getElementById('ed-redline-fields').style.display = on ? '' : 'none';
+    document.getElementById('ed-fixed-fields').style.display   = on ? 'none' : '';
+    document.getElementById('ed-btn-rl-on').classList.toggle('active', on);
+    document.getElementById('ed-btn-rl-off').classList.toggle('active', !on);
+    ['ed-ss','ed-cr','ed-ca'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.required = on;
+    });
+    const ao = document.getElementById('ed-ao'); if (ao) ao.required = !on;
+    edCalc();
+  }
+
+  function edCalc() {
+    const ss = parseFloat(document.getElementById('ed-ss')?.value) || 0;
+    const cr = parseFloat(document.getElementById('ed-cr')?.value) || 0;
+    const ad = parseFloat(document.getElementById('ed-ad')?.value) || 0;
+    const ca = parseFloat(document.getElementById('ed-ca')?.value) || 0;
+    const prev = document.getElementById('ed-preview');
+    if (!ss || !ca) { if (prev) prev.style.display = 'none'; return; }
+    const comm = ca - (ss * cr) - ad;
+    const fmt  = v => '$' + v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('ed-pc').textContent = fmt(comm);
+    document.getElementById('ed-pc').style.color = comm >= 0 ? 'var(--accent)' : 'var(--red)';
+    document.getElementById('ed-pp').textContent = '$' + (ca/ss).toFixed(4) + '/W';
+    document.getElementById('ed-pn').textContent = '$' + ((ca-ad)/ss).toFixed(4) + '/W';
+    prev.style.display = '';
+  }
+
+  function openEditModal(dealId) {
+    mwModalOpen('Edit deal', 'edit-deal-dash-tpl');
+    const form = document.getElementById('ed-form');
+    if (form) form.action = '/deals/' + dealId + '/edit';
+
+    fetch('/deals/' + dealId + '/data')
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('ed-name').value  = d.name;
+        document.getElementById('ed-notes').value = d.notes;
+
+        const dealer = document.getElementById('ed-dealer');
+        if (dealer) [...dealer.options].forEach(o => o.selected = (parseInt(o.value) === d.installer_id));
+
+        const status = document.getElementById('ed-status');
+        if (status) [...status.options].forEach(o => o.selected = (parseInt(o.value) === d.current_status_id));
+
+        if (d.use_redline) {
+          const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+          set('ed-ss', d.system_size);
+          set('ed-cr', d.company_redline);
+          set('ed-ad', d.adders ?? 0);
+          set('ed-ca', d.contract_amount);
+        } else {
+          const ao = document.getElementById('ed-ao');
+          if (ao) ao.value = d.amount_owed ?? '';
+        }
+        edSetRedline(d.use_redline);
+      });
+  }
+
+  document.addEventListener('submit', function (e) {
+    const form = e.target;
+    if (form.id !== 'ed-form') return;
+    e.preventDefault();
+    const btn = document.getElementById('ed-submit');
+    const err = document.getElementById('ed-error');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+    err.style.display = 'none';
+
+    fetch(form.action, { method: 'POST', body: new FormData(form) })
+      .then(async r => {
+        const data = await r.json();
+        if (data.ok) {
+          mwModalClose();
+          fetch(location.href).then(res => res.text()).then(html => {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const nt = doc.getElementById('deals-table');
+            const ct = document.getElementById('deals-table');
+            if (nt && ct) ct.replaceWith(nt);
+          });
+          const banner = document.createElement('div');
+          banner.className = 'mw-alert success';
+          banner.style.cssText = 'position:fixed;top:70px;right:20px;z-index:700;min-width:260px;box-shadow:0 4px 16px rgba(0,0,0,.12);';
+          banner.innerHTML = '<i class="fa-solid fa-check-circle"></i><div>Deal <b>' + data.deal_name + '</b> updated.</div>';
+          document.body.appendChild(banner);
+          setTimeout(() => banner.remove(), 3500);
+        } else {
+          err.textContent = data.error || 'Something went wrong.';
+          err.style.display = '';
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>Save changes';
+        }
+      });
+  });
+
+  // ── New-deal modal logic ──────────────────────────────────────────────────
+  function ndSetRedline(on) {
+    document.getElementById('nd-use-redline').value = on ? '1' : '0';
+    document.getElementById('nd-redline-fields').style.display = on ? '' : 'none';
+    document.getElementById('nd-fixed-fields').style.display   = on ? 'none' : '';
+    document.getElementById('nd-btn-rl-on').classList.toggle('active', on);
+    document.getElementById('nd-btn-rl-off').classList.toggle('active', !on);
+    ['nd-ss','nd-cr','nd-ca'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.required = on;
+    });
+    const ao = document.getElementById('nd-ao');
+    if (ao) ao.required = !on;
+    ndCalc();
+  }
+
+  function ndCalc() {
+    const ss = parseFloat(document.getElementById('nd-ss')?.value) || 0;
+    const cr = parseFloat(document.getElementById('nd-cr')?.value) || 0;
+    const ad = parseFloat(document.getElementById('nd-ad')?.value) || 0;
+    const ca = parseFloat(document.getElementById('nd-ca')?.value) || 0;
+    if (!ss || !ca) { document.getElementById('nd-preview').style.display = 'none'; return; }
+    const comm   = ca - (ss * cr) - ad;
+    const ppw    = ca / ss;
+    const netPpw = (ca - ad) / ss;
+    const fmt  = v => '$' + v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const fmtW = v => '$' + v.toFixed(4) + '/W';
+    document.getElementById('nd-pc').textContent = fmt(comm);
+    document.getElementById('nd-pc').style.color = comm >= 0 ? 'var(--accent)' : 'var(--red)';
+    document.getElementById('nd-pp').textContent = fmtW(ppw);
+    document.getElementById('nd-pn').textContent = fmtW(netPpw);
+    document.getElementById('nd-preview').style.display = '';
+  }
+
+  // Intercept nav "+ New deal" button on dashboard
+  document.addEventListener('DOMContentLoaded', function () {
+    const navBtn = document.querySelector('.mw-newbtn');
+    if (!navBtn) return;
+    navBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      mwModalOpen('New deal', 'new-deal-tpl');
+      // Init redline state after modal content is cloned into DOM
+      setTimeout(() => ndSetRedline(true), 0);
+    });
+  });
+
+  // AJAX form submit
+  document.addEventListener('submit', function (e) {
+    const form = e.target;
+    if (form.id !== 'nd-form') return;
+    e.preventDefault();
+
+    const btn = document.getElementById('nd-submit');
+    const errBox = document.getElementById('nd-error');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating…';
+    errBox.style.display = 'none';
+
+    fetch(form.action, {
+      method: 'POST',
+      body: new FormData(form),
+    })
+    .then(async r => {
+      const data = await r.json();
+      if (data.ok) {
+        mwModalClose();
+        // Refresh the deals table in place
+        fetch(location.href)
+          .then(res => res.text())
+          .then(html => {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const newTable = doc.getElementById('deals-table');
+            const cur = document.getElementById('deals-table');
+            if (newTable && cur) cur.replaceWith(newTable);
+          });
+        // Show a temporary success banner
+        const banner = document.createElement('div');
+        banner.className = 'mw-alert success';
+        banner.style.cssText = 'position:fixed;top:70px;right:20px;z-index:700;min-width:260px;box-shadow:0 4px 16px rgba(0,0,0,.12);';
+        banner.innerHTML = '<i class="fa-solid fa-check-circle"></i><div>Deal <b>' + data.deal_name + '</b> created.</div>';
+        document.body.appendChild(banner);
+        setTimeout(() => banner.remove(), 3500);
+      } else {
+        errBox.textContent = data.error || 'Something went wrong.';
+        errBox.style.display = '';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-plus"></i>Create deal';
+      }
+    })
+    .catch(() => {
+      errBox.textContent = 'Network error. Please try again.';
+      errBox.style.display = '';
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-plus"></i>Create deal';
+    });
+  });
+
+  // AJAX pagination — swap only #deals-table, no full-page reload
+  document.addEventListener('click', function (e) {
+    const link = e.target.closest('[data-page-link]');
+    if (!link || link.style.pointerEvents === 'none') return;
+    e.preventDefault();
+
+    const table = document.getElementById('deals-table');
+    if (!table) return;
+
+    table.style.opacity = '0.5';
+    table.style.pointerEvents = 'none';
+
+    fetch(link.href)
+      .then(r => r.text())
+      .then(html => {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const newTable = doc.getElementById('deals-table');
+        if (newTable) {
+          table.replaceWith(newTable);
+          history.pushState(null, '', link.href);
+        }
+      })
+      .catch(() => { window.location.href = link.href; });
+  });
+
+  // Handle browser back/forward
+  window.addEventListener('popstate', function () {
+    fetch(location.href)
+      .then(r => r.text())
+      .then(html => {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const newTable = doc.getElementById('deals-table');
+        const cur = document.getElementById('deals-table');
+        if (newTable && cur) cur.replaceWith(newTable);
+      });
+  });
+</script>
 {% endblock %}
