@@ -75,6 +75,8 @@ class Status(db.Model):
     order = db.Column(db.Integer, nullable=False, default=99)
     color = db.Column(db.String(20), default="gray")
     is_default = db.Column(db.Boolean, default=False)
+    # 'install' or 'payroll'
+    type = db.Column(db.String(20), default='install', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     deals = db.relationship(
@@ -109,7 +111,12 @@ class Deal(db.Model):
     # Payment tracking
     amount_paid = db.Column(db.Float, default=0.0, nullable=False)
 
+    # Install status (was current_status_id)
     current_status_id = db.Column(db.Integer, db.ForeignKey("statuses.id"), nullable=True)
+
+    # Payroll status (new)
+    payroll_status_id = db.Column(db.Integer, db.ForeignKey("statuses.id"), nullable=True)
+
     notes = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -117,6 +124,9 @@ class Deal(db.Model):
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
 
     creator = db.relationship("User", foreign_keys=[created_by])
+    payroll_status = db.relationship(
+        "Status", foreign_keys=[payroll_status_id], backref="payroll_deals", lazy=True
+    )
     status_history = db.relationship(
         "DealStatusHistory", backref="deal", lazy=True,
         order_by="DealStatusHistory.changed_at"
@@ -156,6 +166,8 @@ class DealStatusHistory(db.Model):
     changed_at = db.Column(db.DateTime, default=datetime.utcnow)
     changed_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     note = db.Column(db.String(500), nullable=True)
+    # 'install' or 'payroll'
+    status_type = db.Column(db.String(20), default='install', nullable=False)
 
     changer = db.relationship("User", foreign_keys=[changed_by])
 

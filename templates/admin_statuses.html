@@ -33,29 +33,39 @@
   .as-preview { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: var(--surface-2); border-radius: 10px; margin-bottom: 14px; }
   .as-preview .lbl { font-size: 11px; color: var(--muted); }
   .sortable-ghost { opacity: .4; background: var(--green-soft) !important; }
+
+  .as-section-head { padding: 12px 22px 8px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; border-bottom: 1px solid var(--border-soft); display: flex; align-items: center; gap: 8px; }
+  .as-section-divider { padding: 8px 22px 8px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; border-top: 2px solid var(--border); border-bottom: 1px solid var(--border-soft); display: flex; align-items: center; gap: 8px; background: var(--surface-2); margin-top: 4px; }
+
+  .as-type-toggle { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
+  .as-type-btn { flex: 1; padding: 8px; font-size: 12px; font-weight: 500; color: var(--muted); background: var(--surface-2); border: none; cursor: pointer; transition: background .12s, color .12s; font-family: 'Inter', sans-serif; }
+  .as-type-btn:first-child { border-right: 1px solid var(--border); }
+  .as-type-btn.active { background: #fff; color: var(--text); }
 </style>
 
 <div class="mw-page-head">
   <div>
     <div class="mw-h1">Status management</div>
-    <div class="mw-hsub">Define the pipeline stages and their chronological order. Lower order = earlier in pipeline.</div>
+    <div class="mw-hsub">Define install and payroll stages. Each deal tracks both independently.</div>
   </div>
-  <span class="mw-chip gray"><span class="dot"></span>{{ statuses | length }} stage{{ 's' if statuses | length != 1 }}</span>
+  <div style="display:flex;gap:8px;">
+    <span class="mw-chip blue"><span class="dot" style="background:#4f7a9a;"></span>{{ install_statuses | length }} install</span>
+    <span class="mw-chip green"><span class="dot" style="background:#3f6651;"></span>{{ payroll_statuses | length }} payroll</span>
+  </div>
 </div>
 
 <div class="as-grid">
 
   <!-- LEFT: Pipeline stages list -->
   <div class="mw-card" style="padding:0;">
-    <div class="mw-card-head" style="padding:18px 22px 12px;">
-      <div class="mw-card-title"><i class="fa-solid fa-layer-group"></i>Pipeline stages</div>
-      {% set total_deal_count = namespace(v=0) %}{% for s in statuses %}{% set total_deal_count.v = total_deal_count.v + (s.deals | length) %}{% endfor %}
-      <div class="mw-card-meta">{{ total_deal_count.v }} deal{{ 's' if total_deal_count.v != 1 }} across all stages</div>
+    <div class="as-section-head">
+      <i class="fa-solid fa-wrench" style="color:#4f7a9a;"></i>Install stages
+      <span style="font-size:10px;font-weight:400;color:var(--muted-2);text-transform:none;letter-spacing:0;">(NTP, On going…)</span>
     </div>
 
-    {% if statuses %}
-    <div id="stages-list">
-      {% for s in statuses %}
+    {% if install_statuses %}
+    <div id="install-stages-list">
+      {% for s in install_statuses %}
       <div class="as-row" data-id="{{ s.id }}">
         <div class="as-grip" style="cursor:grab;"><i class="fa-solid fa-grip-vertical"></i></div>
         <div class="as-order" id="order-badge-{{ s.id }}">{{ s.order }}</div>
@@ -72,7 +82,8 @@
                   data-name="{{ s.name | e }}"
                   data-order="{{ s.order }}"
                   data-color="{{ s.color }}"
-                  onclick="openEdit(this.dataset.id, this.dataset.name, this.dataset.order, this.dataset.color)">
+                  data-type="{{ s.type }}"
+                  onclick="openEdit(this.dataset.id, this.dataset.name, this.dataset.order, this.dataset.color, this.dataset.type)">
             <i class="fa-solid fa-pen"></i>
           </button>
           {% if s.deals %}
@@ -90,16 +101,68 @@
           </form>
           {% endif %}
         </div>
-        <div style="text-align:right;padding-right:22px;display:flex;gap:6px;justify-content:flex-end;">
-        </div>
+        <div style="text-align:right;padding-right:22px;"></div>
       </div>
       {% endfor %}
     </div>
     {% else %}
-    <div class="mw-empty">
-      <i class="fa-solid fa-tags"></i>
-      <div class="title">No statuses yet</div>
-      <div class="sub">Create your first pipeline stage.</div>
+    <div class="mw-empty" style="padding:20px 0;">
+      <i class="fa-solid fa-wrench"></i>
+      <div class="title">No install stages yet</div>
+    </div>
+    {% endif %}
+
+    <div class="as-section-divider">
+      <i class="fa-solid fa-dollar-sign" style="color:#3f6651;"></i>Payroll stages
+      <span style="font-size:10px;font-weight:400;color:var(--muted-2);text-transform:none;letter-spacing:0;">(Unpaid, Partial paid, Paid…)</span>
+    </div>
+
+    {% if payroll_statuses %}
+    <div id="payroll-stages-list">
+      {% for s in payroll_statuses %}
+      <div class="as-row" data-id="{{ s.id }}">
+        <div class="as-grip" style="cursor:grab;"><i class="fa-solid fa-grip-vertical"></i></div>
+        <div class="as-order" id="order-badge-{{ s.id }}">{{ s.order }}</div>
+        <div class="as-name">
+          <span class="mw-chip {{ s.color | mw_chip }}">
+            <span class="dot" style="background:{{ s.color | mw_dot }};"></span>
+            {{ s.name }}
+          </span>
+        </div>
+        {% set n = s.payroll_deals | length %}<div class="as-deals"><b>{{ n }}</b> deal{{ 's' if n != 1 }}</div>
+        <div class="as-actions">
+          <button type="button" class="edit" title="Edit"
+                  data-id="{{ s.id }}"
+                  data-name="{{ s.name | e }}"
+                  data-order="{{ s.order }}"
+                  data-color="{{ s.color }}"
+                  data-type="{{ s.type }}"
+                  onclick="openEdit(this.dataset.id, this.dataset.name, this.dataset.order, this.dataset.color, this.dataset.type)">
+            <i class="fa-solid fa-pen"></i>
+          </button>
+          {% if s.payroll_deals %}
+          <span class="lock-icon" title="Cannot delete: has {{ s.payroll_deals | length }} deal(s)">
+            <i class="fa-solid fa-lock" style="font-size:11px;"></i>
+          </span>
+          {% else %}
+          <form method="POST" action="{{ url_for('admin_statuses') }}" style="margin:0;"
+                onsubmit="return confirm('Delete stage «{{ s.name | e }}»? This cannot be undone.')">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="status_id" value="{{ s.id }}">
+            <button type="submit" class="del" title="Delete">
+              <i class="fa-solid fa-trash" style="font-size:11px;"></i>
+            </button>
+          </form>
+          {% endif %}
+        </div>
+        <div style="text-align:right;padding-right:22px;"></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="mw-empty" style="padding:20px 0;">
+      <i class="fa-solid fa-dollar-sign"></i>
+      <div class="title">No payroll stages yet</div>
     </div>
     {% endif %}
   </div>
@@ -130,13 +193,28 @@
       <div id="create-form">
         <form method="POST" action="{{ url_for('admin_statuses') }}">
           <input type="hidden" name="action" value="create">
+          <!-- Type toggle -->
+          <div class="mw-field">
+            <label class="mw-form-lbl">Type</label>
+            <div class="as-type-toggle">
+              <button type="button" class="as-type-btn active" id="create-type-install"
+                      onclick="setCreateType('install')">
+                <i class="fa-solid fa-wrench" style="margin-right:5px;font-size:11px;"></i>Install
+              </button>
+              <button type="button" class="as-type-btn" id="create-type-payroll"
+                      onclick="setCreateType('payroll')">
+                <i class="fa-solid fa-dollar-sign" style="margin-right:5px;font-size:11px;"></i>Payroll
+              </button>
+            </div>
+            <input type="hidden" name="type" id="create-type" value="install">
+          </div>
           <div class="mw-field">
             <label class="mw-form-lbl">Name <span class="req">*</span></label>
             <input type="text" name="name" required placeholder="e.g. Under Review, Rejected…" class="mw-input"
                    oninput="document.getElementById('chip-text').textContent = this.value || 'New status'">
           </div>
           <div class="mw-field">
-            <label class="mw-form-lbl">Order <span class="hint">lower = earlier in pipeline</span></label>
+            <label class="mw-form-lbl">Order <span class="hint">lower = earlier in group</span></label>
             <input type="number" name="order" value="{{ statuses | length + 1 }}" min="1" max="999" class="mw-input mono">
           </div>
           <div class="mw-field" style="margin-bottom:16px;">
@@ -164,12 +242,16 @@
           <input type="hidden" name="action" value="update">
           <input type="hidden" name="status_id" id="edit-status-id">
           <div class="mw-field">
+            <label class="mw-form-lbl">Type</label>
+            <div id="edit-type-display" style="font-size:12px;color:var(--muted);padding:6px 0;"></div>
+          </div>
+          <div class="mw-field">
             <label class="mw-form-lbl">Name <span class="req">*</span></label>
             <input type="text" name="name" id="edit-name" required class="mw-input"
                    oninput="document.getElementById('chip-text').textContent = this.value || 'Edit status'">
           </div>
           <div class="mw-field">
-            <label class="mw-form-lbl">Order <span class="hint">lower = earlier in pipeline</span></label>
+            <label class="mw-form-lbl">Order <span class="hint">lower = earlier in group</span></label>
             <input type="number" name="order" id="edit-order" min="1" max="999" class="mw-input mono">
           </div>
           <div class="mw-field" style="margin-bottom:16px;">
@@ -195,7 +277,7 @@
     <div class="mw-alert info">
       <i class="fa-solid fa-circle-info"></i>
       <div>
-        <b>Heads up:</b> Renaming a status updates it across all deals immediately. Order changes affect display only.
+        <b>Two tag systems:</b> Every deal tracks an <b>install status</b> (e.g. NTP, On going) and a <b>payroll status</b> (e.g. Unpaid, Paid) independently.
       </div>
     </div>
   </div>
@@ -208,9 +290,6 @@
 <script>
   const COLOR_DOTS = {
     {% for c in COLOR_OPTIONS %}"{{ c }}": "{{ c | mw_dot }}"{% if not loop.last %},{% endif %}{% endfor %}
-  };
-  const COLOR_CHIPS = {
-    {% for c in COLOR_OPTIONS %}"{{ c }}": "{{ c | mw_chip }}"{% if not loop.last %},{% endif %}{% endfor %}
   };
 
   const CHIP_STYLES = {
@@ -241,11 +320,22 @@
     updateChip(color);
   }
 
-  function openEdit(id, name, order, color) {
+  function setCreateType(type) {
+    document.getElementById('create-type').value = type;
+    document.getElementById('create-type-install').classList.toggle('active', type === 'install');
+    document.getElementById('create-type-payroll').classList.toggle('active', type === 'payroll');
+  }
+
+  function openEdit(id, name, order, color, type) {
     document.getElementById('edit-status-id').value = id;
     document.getElementById('edit-name').value = name;
     document.getElementById('edit-order').value = order;
     document.getElementById('chip-text').textContent = name;
+
+    const typeLabel = type === 'payroll'
+      ? '<i class="fa-solid fa-dollar-sign" style="margin-right:5px;"></i>Payroll status'
+      : '<i class="fa-solid fa-wrench" style="margin-right:5px;"></i>Install status';
+    document.getElementById('edit-type-display').innerHTML = typeLabel;
 
     document.getElementById('create-form').style.display = 'none';
     document.getElementById('edit-form').style.display   = '';
@@ -267,20 +357,45 @@
     selectColor('create', 'gray', document.querySelector('#colors-create [data-color="gray"]'));
   }
 
-  // ── Drag-and-drop reorder ──────────────────────────────────────────────────
-  const list = document.getElementById('stages-list');
-  if (list) {
-    Sortable.create(list, {
+  // ── Drag-and-drop reorder for install stages ───────────────────────────────
+  const installList = document.getElementById('install-stages-list');
+  if (installList) {
+    Sortable.create(installList, {
       handle: '.as-grip',
       animation: 150,
       ghostClass: 'sortable-ghost',
       onEnd: function () {
-        const rows = list.querySelectorAll('.as-row[data-id]');
+        const rows = installList.querySelectorAll('.as-row[data-id]');
         const payload = Array.from(rows).map((row, idx) => ({
           id: parseInt(row.dataset.id),
           order: idx + 1
         }));
-        // Update order badges immediately
+        rows.forEach((row, idx) => {
+          const badge = row.querySelector('.as-order');
+          if (badge) badge.textContent = idx + 1;
+        });
+        fetch('{{ url_for("admin_statuses_reorder") }}', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+      }
+    });
+  }
+
+  // ── Drag-and-drop reorder for payroll stages ──────────────────────────────
+  const payrollList = document.getElementById('payroll-stages-list');
+  if (payrollList) {
+    Sortable.create(payrollList, {
+      handle: '.as-grip',
+      animation: 150,
+      ghostClass: 'sortable-ghost',
+      onEnd: function () {
+        const rows = payrollList.querySelectorAll('.as-row[data-id]');
+        const payload = Array.from(rows).map((row, idx) => ({
+          id: parseInt(row.dataset.id),
+          order: idx + 1
+        }));
         rows.forEach((row, idx) => {
           const badge = row.querySelector('.as-order');
           if (badge) badge.textContent = idx + 1;

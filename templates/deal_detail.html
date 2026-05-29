@@ -68,10 +68,24 @@
     <div class="mw-h1">{{ deal.name }}</div>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:13px;color:var(--muted);">
       {% if deal.current_status %}
-      <span class="mw-chip {{ deal.current_status.color | mw_chip }}">
-        <span class="dot" style="background:{{ deal.current_status.color | mw_dot }};"></span>
-        {{ deal.current_status.name }}
+      <span style="display:inline-flex;align-items:center;gap:5px;">
+        <span style="font-size:10px;font-weight:600;color:var(--muted-2);text-transform:uppercase;letter-spacing:.08em;"><i class="fa-solid fa-wrench" style="font-size:9px;"></i> Install</span>
+        <span class="mw-chip {{ deal.current_status.color | mw_chip }}">
+          <span class="dot" style="background:{{ deal.current_status.color | mw_dot }};"></span>
+          {{ deal.current_status.name }}
+        </span>
       </span>
+      {% endif %}
+      {% if deal.payroll_status %}
+      <span style="display:inline-flex;align-items:center;gap:5px;">
+        <span style="font-size:10px;font-weight:600;color:var(--muted-2);text-transform:uppercase;letter-spacing:.08em;"><i class="fa-solid fa-dollar-sign" style="font-size:9px;"></i> Payroll</span>
+        <span class="mw-chip {{ deal.payroll_status.color | mw_chip }}">
+          <span class="dot" style="background:{{ deal.payroll_status.color | mw_dot }};"></span>
+          {{ deal.payroll_status.name }}
+        </span>
+      </span>
+      {% endif %}
+      {% if deal.current_status or deal.payroll_status %}
       <span style="color:#c8c6b5;">·</span>
       {% endif %}
       <span><b style="color:var(--text);">{{ deal.dealer.name if deal.dealer else '—' }}</b> dealer</span>
@@ -282,28 +296,64 @@
       <div class="mw-card-head">
         <div class="mw-card-title"><i class="fa-solid fa-arrows-rotate"></i>Update status</div>
       </div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
-        Current: <b style="color:var(--text);">{{ deal.current_status.name if deal.current_status else '—' }}</b>
+
+      <!-- Install status update -->
+      <div style="margin-bottom:18px;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">
+          <i class="fa-solid fa-wrench" style="color:#4f7a9a;margin-right:4px;"></i>Install status
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+          Current: <b style="color:var(--text);">{{ deal.current_status.name if deal.current_status else '—' }}</b>
+        </div>
+        <form method="POST" action="{{ url_for('deal_update_status', deal_id=deal.id) }}">
+          <input type="hidden" name="status_type" value="install">
+          <div class="mw-field">
+            <select name="status_id" class="mw-input">
+              {% for s in install_statuses %}
+              <option value="{{ s.id }}" {% if deal.current_status_id == s.id %}selected{% endif %}>
+                {{ s.name }}{% if deal.current_status_id == s.id %} (current){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mw-field" style="margin-bottom:10px;">
+            <input type="text" name="note" placeholder="Add a note…" class="mw-input">
+          </div>
+          <button type="submit" class="mw-btn primary mw-btn-full" style="font-size:12px;">
+            <i class="fa-solid fa-check"></i>Update install status
+          </button>
+        </form>
       </div>
-      <form method="POST" action="{{ url_for('deal_update_status', deal_id=deal.id) }}">
-        <div class="mw-field">
-          <label class="mw-form-lbl">New status</label>
-          <select name="status_id" class="mw-input">
-            {% for s in statuses %}
-            <option value="{{ s.id }}" {% if deal.current_status_id == s.id %}selected{% endif %}>
-              {{ s.name }}{% if deal.current_status_id == s.id %} (current){% endif %}
-            </option>
-            {% endfor %}
-          </select>
+
+      <div style="border-top:1px solid var(--border-soft);margin:0 0 16px;"></div>
+
+      <!-- Payroll status update -->
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">
+          <i class="fa-solid fa-dollar-sign" style="color:#3f6651;margin-right:4px;"></i>Payroll status
         </div>
-        <div class="mw-field" style="margin-bottom:14px;">
-          <label class="mw-form-lbl">Note (optional)</label>
-          <input type="text" name="note" placeholder="Add a comment…" class="mw-input">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+          Current: <b style="color:var(--text);">{{ deal.payroll_status.name if deal.payroll_status else '—' }}</b>
         </div>
-        <button type="submit" class="mw-btn primary mw-btn-full">
-          <i class="fa-solid fa-check"></i>Update status
-        </button>
-      </form>
+        <form method="POST" action="{{ url_for('deal_update_status', deal_id=deal.id) }}">
+          <input type="hidden" name="status_type" value="payroll">
+          <div class="mw-field">
+            <select name="status_id" class="mw-input">
+              {% for s in payroll_statuses %}
+              <option value="{{ s.id }}" {% if deal.payroll_status_id == s.id %}selected{% endif %}>
+                {{ s.name }}{% if deal.payroll_status_id == s.id %} (current){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mw-field" style="margin-bottom:10px;">
+            <input type="text" name="note" placeholder="Add a note…" class="mw-input">
+          </div>
+          <button type="submit" class="mw-btn accent mw-btn-full" style="font-size:12px;">
+            <i class="fa-solid fa-check"></i>Update payroll status
+          </button>
+        </form>
+      </div>
     </div>
 
     <!-- Status History -->
@@ -317,9 +367,14 @@
       <div class="mw-time-item {% if item.is_current %}current{% endif %}">
         <div class="mw-time-dot"></div>
         <div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);">
+          <div style="font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             {{ item.entry.status.name }}
-            {% if item.is_current %}<span style="font-size:10px;color:var(--accent);font-weight:500;text-transform:uppercase;letter-spacing:.12em;margin-left:8px;">● current</span>{% endif %}
+            {% if item.entry.status_type == 'payroll' %}
+            <span style="font-size:9px;font-weight:600;color:#3f6651;text-transform:uppercase;letter-spacing:.1em;background:var(--green-soft);padding:1px 6px;border-radius:999px;"><i class="fa-solid fa-dollar-sign" style="margin-right:2px;"></i>Payroll</span>
+            {% else %}
+            <span style="font-size:9px;font-weight:600;color:#3a5870;text-transform:uppercase;letter-spacing:.1em;background:#e8eff5;padding:1px 6px;border-radius:999px;"><i class="fa-solid fa-wrench" style="margin-right:2px;"></i>Install</span>
+            {% endif %}
+            {% if item.is_current %}<span style="font-size:10px;color:var(--accent);font-weight:500;text-transform:uppercase;letter-spacing:.12em;">● current</span>{% endif %}
           </div>
           <div style="font-size:11px;color:var(--muted);margin-top:2px;font-feature-settings:'tnum';">{{ item.entry.changed_at | fmt_dt }}</div>
           {% if item.entry.note %}
@@ -386,10 +441,18 @@
           </select>
         </div>
         <div class="mw-field">
-          <label class="mw-form-lbl">Status</label>
+          <label class="mw-form-lbl"><i class="fa-solid fa-wrench" style="font-size:10px;color:#4f7a9a;margin-right:3px;"></i>Install status</label>
           <select name="status_id" id="ed-status" class="mw-input">
-            {% for s in statuses %}
+            {% for s in install_statuses %}
             <option value="{{ s.id }}" {% if deal.current_status_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mw-field">
+          <label class="mw-form-lbl"><i class="fa-solid fa-dollar-sign" style="font-size:10px;color:#3f6651;margin-right:3px;"></i>Payroll status</label>
+          <select name="payroll_status_id" id="ed-payroll-status" class="mw-input">
+            {% for s in payroll_statuses %}
+            <option value="{{ s.id }}" {% if deal.payroll_status_id == s.id %}selected{% endif %}>{{ s.name }}</option>
             {% endfor %}
           </select>
         </div>

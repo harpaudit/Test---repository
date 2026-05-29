@@ -98,7 +98,7 @@ def admin_required(f):
 
 
 def _record_payment(deal, amount, user_id, note=None):
-    """Record a payment and handle status auto-transitions. Returns (paid_in_full: bool)."""
+    """Record a payment and handle payroll status auto-transitions. Returns (paid_in_full: bool)."""
     db.session.add(Payment(
         deal_id=deal.id, amount=amount,
         recorded_by=user_id, note=note
@@ -106,26 +106,40 @@ def _record_payment(deal, amount, user_id, note=None):
     deal.amount_paid = round((deal.amount_paid or 0.0) + amount, 2)
     deal.updated_at = datetime.utcnow()
 
-    # Auto-transition to Paid when balance is cleared
+    # Auto-transition payroll status to Paid when balance is cleared
     if deal.remaining_balance <= 0.01:
-        paid_status = Status.query.filter_by(name="Paid").first()
-        if paid_status and deal.current_status_id != paid_status.id:
-            deal.current_status_id = paid_status.id
+        paid_status = Status.query.filter_by(name="Paid", type="payroll").first()
+        if paid_status and deal.payroll_status_id != paid_status.id:
+            deal.payroll_status_id = paid_status.id
             db.session.add(DealStatusHistory(
                 deal_id=deal.id, status_id=paid_status.id,
                 changed_by=user_id,
+                status_type="payroll",
                 note=f"Auto-transitioned: paid in full (last payment ${amount:,.2f})"
             ))
         return True
 
-    # Auto-transition to Partial paid if not already in a payment status
-    if deal.current_status and deal.current_status.name not in ("Partial paid", "Paid"):
-        partial = Status.query.filter_by(name="Partial paid").first()
+    # Auto-transition to Partial paid if not already in a payment payroll status
+    payroll_status = deal.payroll_status
+    if payroll_status and payroll_status.name not in ("Partial paid", "Paid"):
+        partial = Status.query.filter_by(name="Partial paid", type="payroll").first()
         if partial:
-            deal.current_status_id = partial.id
+            deal.payroll_status_id = partial.id
             db.session.add(DealStatusHistory(
                 deal_id=deal.id, status_id=partial.id,
                 changed_by=user_id,
+                status_type="payroll",
+                note=f"Payment of ${amount:,.2f} received"
+            ))
+    elif not payroll_status:
+        # No payroll status set — auto-assign Partial paid
+        partial = Status.query.filter_by(name="Partial paid", type="payroll").first()
+        if partial:
+            deal.payroll_status_id = partial.id
+            db.session.add(DealStatusHistory(
+                deal_id=deal.id, status_id=partial.id,
+                changed_by=user_id,
+                status_type="payroll",
                 note=f"Payment of ${amount:,.2f} received"
             ))
     return False
@@ -207,10 +221,10 @@ def create_app():
     def inject_globals():
         ctx = {"current_dt": datetime.utcnow(), "COLOR_OPTIONS": COLOR_OPTIONS}
         if current_user.is_authenticated:
-            paid = Status.query.filter_by(name="Paid").first()
+            paid = Status.query.filter_by(name="Paid", type="payroll").first()
             if paid:
                 ctx["unpaid_count"] = Deal.query.filter(
-                    Deal.current_status_id != paid.id
+                    Deal.payroll_status_id != paid.id
                 ).count()
             else:
                 ctx["unpaid_count"] = Deal.query.count()
@@ -221,7 +235,7 @@ def create_app():
     # ── DB init + seed ────────────────────────────────────────────────────────
     with app.app_context():
         db.create_all()
-        # Add new Dealer columns to existing installers table if not present
+        # Add new columns to existing tables if not present
         from sqlalchemy import text
         with db.engine.connect() as _conn:
             for _col in [
@@ -229,24 +243,61 @@ def create_app():
                 "ALTER TABLE installers ADD COLUMN website TEXT",
                 "ALTER TABLE installers ADD COLUMN portal_username TEXT",
                 "ALTER TABLE installers ADD COLUMN portal_password TEXT",
+                "ALTER TABLE statuses ADD COLUMN type TEXT NOT NULL DEFAULT 'install'",
+                "ALTER TABLE deals ADD COLUMN payroll_status_id INTEGER REFERENCES statuses(id)",
+                "ALTER TABLE deal_status_history ADD COLUMN status_type TEXT NOT NULL DEFAULT 'install'",
             ]:
                 try:
                     _conn.execute(text(_col))
                     _conn.commit()
                 except Exception:
                     pass
+            # Classify existing statuses by name
+            try:
+                _conn.execute(text("UPDATE statuses SET type='payroll' WHERE name IN ('Unpaid','Partial paid','Paid')"))
+                _conn.execute(text("UPDATE statuses SET type='install' WHERE name IN ('NTP','On going')"))
+                _conn.commit()
+            except Exception:
+                pass
+            # For deals whose current_status_id points to a payroll status:
+            # move it to payroll_status_id and clear current_status_id
+            try:
+                _conn.execute(text("""
+                    UPDATE deals SET
+                        payroll_status_id = current_status_id,
+                        current_status_id = NULL
+                    WHERE current_status_id IN (
+                        SELECT id FROM statuses WHERE type = 'payroll'
+                    ) AND payroll_status_id IS NULL
+                """))
+                _conn.commit()
+            except Exception:
+                pass
+
+        # Ensure every deal has both an install and payroll status
+        _on_going = Status.query.filter_by(name="On going", type="install").first()
+        _unpaid   = Status.query.filter_by(name="Unpaid",   type="payroll").first()
+        if _on_going or _unpaid:
+            for _d in Deal.query.all():
+                if _d.current_status_id is None and _on_going:
+                    _d.current_status_id = _on_going.id
+                if _d.payroll_status_id is None and _unpaid:
+                    _d.payroll_status_id = _unpaid.id
+            db.session.commit()
+
         if not User.query.filter_by(email="Admin@harpaudit.com").first():
             admin = User(email="Admin@harpaudit.com", role="admin")
             admin.set_password("Orion123#")
             db.session.add(admin)
         if Status.query.count() == 0:
-            for name, order, color in [
-                ("On going",     1, "blue"),
-                ("Unpaid",       2, "red"),
-                ("Partial paid", 3, "yellow"),
-                ("Paid",         4, "green"),
+            for name, order, color, stype in [
+                ("NTP",          1, "yellow", "install"),
+                ("On going",     2, "blue",   "install"),
+                ("Unpaid",       1, "red",    "payroll"),
+                ("Partial paid", 2, "yellow", "payroll"),
+                ("Paid",         3, "green",  "payroll"),
             ]:
-                db.session.add(Status(name=name, order=order, color=color, is_default=True))
+                db.session.add(Status(name=name, order=order, color=color, is_default=True, type=stype))
         db.session.commit()
 
     # ═════════════════════════════════════════════════════════════════════════
@@ -288,13 +339,15 @@ def create_app():
     @app.route("/")
     @login_required
     def dashboard():
-        installer_filter = request.args.get("installer_id", "")
-        status_filter    = request.args.get("status_id", "")
-        page             = request.args.get("page", 1, type=int)
-        per_page_raw     = request.args.get("per_page", 10, type=int)
-        per_page         = per_page_raw if per_page_raw in (10, 20, 50) else 10
-        sort             = request.args.get("sort", "created")
-        direction        = request.args.get("dir", "desc")
+        installer_filter  = request.args.get("installer_id", "")
+        # install_filter accepts both new "install_id" param and legacy "status_id" param
+        install_filter    = request.args.get("install_id", "") or request.args.get("status_id", "")
+        payroll_filter    = request.args.get("payroll_id", "")
+        page              = request.args.get("page", 1, type=int)
+        per_page_raw      = request.args.get("per_page", 10, type=int)
+        per_page          = per_page_raw if per_page_raw in (10, 20, 50) else 10
+        sort              = request.args.get("sort", "created")
+        direction         = request.args.get("dir", "desc")
         if sort not in ("created", "original", "remaining"):
             sort = "created"
         if direction not in ("asc", "desc"):
@@ -303,8 +356,10 @@ def create_app():
         query = Deal.query
         if installer_filter:
             query = query.filter_by(installer_id=int(installer_filter))
-        if status_filter:
-            query = query.filter_by(current_status_id=int(status_filter))
+        if install_filter:
+            query = query.filter_by(current_status_id=int(install_filter))
+        if payroll_filter:
+            query = query.filter_by(payroll_status_id=int(payroll_filter))
 
         if sort == "created":
             order_col = Deal.created_at.desc() if direction == "desc" else Deal.created_at.asc()
@@ -318,18 +373,21 @@ def create_app():
 
         deals = pagination.items
 
-        all_deals = Deal.query.all()
-        dealers   = Dealer.query.filter_by(is_active=True).order_by(Dealer.name).all()
-        statuses  = Status.query.order_by(Status.order).all()
+        all_deals        = Deal.query.all()
+        dealers          = Dealer.query.filter_by(is_active=True).order_by(Dealer.name).all()
+        install_statuses = Status.query.filter_by(type='install').order_by(Status.order).all()
+        payroll_statuses = Status.query.filter_by(type='payroll').order_by(Status.order).all()
+        # Combined list for legacy template references
+        statuses         = install_statuses + payroll_statuses
 
-        paid_status    = Status.query.filter_by(name="Paid").first()
+        paid_status    = Status.query.filter_by(name="Paid", type="payroll").first()
         total_pipeline = sum(d.pipeline_value for d in all_deals)
 
         total_collected = 0.0
         for d in all_deals:
             if (d.amount_paid or 0) > 0:
                 total_collected += d.amount_paid
-            elif paid_status and d.current_status_id == paid_status.id:
+            elif paid_status and d.payroll_status_id == paid_status.id:
                 total_collected += d.original_value
 
         dealer_kpis = [
@@ -340,7 +398,7 @@ def create_app():
                 "total": sum(d.pipeline_value for d in all_deals if d.installer_id == inst.id),
                 "collected": sum(
                     (d.amount_paid if (d.amount_paid or 0) > 0
-                     else (d.original_value if paid_status and d.current_status_id == paid_status.id else 0))
+                     else (d.original_value if paid_status and d.payroll_status_id == paid_status.id else 0))
                     for d in all_deals if d.installer_id == inst.id
                 ),
             }
@@ -349,15 +407,25 @@ def create_app():
         ]
         dealer_kpis.sort(key=lambda x: x["total"], reverse=True)
 
-        status_kpis = [
+        install_kpis = [
             {
                 "id": s.id,
                 "name": s.name,
                 "color": s.color,
                 "count": sum(1 for d in all_deals if d.current_status_id == s.id),
             }
-            for s in statuses
+            for s in install_statuses
         ]
+        payroll_kpis = [
+            {
+                "id": s.id,
+                "name": s.name,
+                "color": s.color,
+                "count": sum(1 for d in all_deals if d.payroll_status_id == s.id),
+            }
+            for s in payroll_statuses
+        ]
+        status_kpis = install_kpis + payroll_kpis
 
         return render_template(
             "dashboard.html",
@@ -369,13 +437,20 @@ def create_app():
             all_deals=all_deals,
             dealers=dealers,
             statuses=statuses,
+            install_statuses=install_statuses,
+            payroll_statuses=payroll_statuses,
             total_deals=len(all_deals),
             total_pipeline=total_pipeline,
             total_collected=total_collected,
             dealer_kpis=dealer_kpis,
             status_kpis=status_kpis,
+            install_kpis=install_kpis,
+            payroll_kpis=payroll_kpis,
             installer_filter=installer_filter,
-            status_filter=status_filter,
+            install_filter=install_filter,
+            payroll_filter=payroll_filter,
+            # legacy alias
+            status_filter=install_filter,
         )
 
     # ═════════════════════════════════════════════════════════════════════════
@@ -385,18 +460,24 @@ def create_app():
     @app.route("/deals/new", methods=["GET", "POST"])
     @login_required
     def deal_new():
-        dealers = Dealer.query.filter_by(is_active=True).order_by(Dealer.name).all()
-        statuses = Status.query.order_by(Status.order).all()
-        default_status = statuses[0] if statuses else None
+        dealers          = Dealer.query.filter_by(is_active=True).order_by(Dealer.name).all()
+        install_statuses = Status.query.filter_by(type='install').order_by(Status.order).all()
+        payroll_statuses = Status.query.filter_by(type='payroll').order_by(Status.order).all()
+        statuses         = install_statuses + payroll_statuses
+        default_install  = install_statuses[0] if install_statuses else None
+        default_payroll  = payroll_statuses[0] if payroll_statuses else None
 
         if request.method == "POST":
-            name = request.form.get("name", "").strip()
+            name         = request.form.get("name", "").strip()
             installer_id = request.form.get("installer_id", type=int)
-            use_redline = request.form.get("use_redline") == "1"
-            notes = request.form.get("notes", "").strip()
-            status_id = request.form.get("status_id", type=int) or (
-                default_status.id if default_status else None
+            use_redline  = request.form.get("use_redline") == "1"
+            notes        = request.form.get("notes", "").strip()
+            status_id    = request.form.get("status_id", type=int) or (
+                default_install.id if default_install else None
             )
+            payroll_status_id = request.form.get("payroll_status_id", type=int)
+            if not payroll_status_id:
+                payroll_status_id = default_payroll.id if default_payroll else None
 
             if not name or not installer_id:
                 if request.form.get("_modal") == "1":
@@ -404,11 +485,15 @@ def create_app():
                     return jsonify({"ok": False, "error": "Deal name and dealer are required."}), 400
                 flash("Deal name and installer are required.", "error")
                 return render_template("deal_form.html", deal=None,
-                                       dealers=dealers, statuses=statuses)
+                                       dealers=dealers, statuses=statuses,
+                                       install_statuses=install_statuses,
+                                       payroll_statuses=payroll_statuses)
 
             deal = Deal(
                 name=name, installer_id=installer_id, use_redline=use_redline,
-                notes=notes, current_status_id=status_id, created_by=current_user.id,
+                notes=notes, current_status_id=status_id,
+                payroll_status_id=payroll_status_id,
+                created_by=current_user.id,
             )
 
             if use_redline:
@@ -420,7 +505,9 @@ def create_app():
                 except ValueError:
                     flash("Financial fields must be valid numbers.", "error")
                     return render_template("deal_form.html", deal=None,
-                                           dealers=dealers, statuses=statuses)
+                                           dealers=dealers, statuses=statuses,
+                                           install_statuses=install_statuses,
+                                           payroll_statuses=payroll_statuses)
                 deal.system_size = ss
                 deal.company_redline = cr
                 deal.adders = ad
@@ -432,14 +519,22 @@ def create_app():
                 except ValueError:
                     flash("Amount must be a valid number.", "error")
                     return render_template("deal_form.html", deal=None,
-                                           dealers=dealers, statuses=statuses)
+                                           dealers=dealers, statuses=statuses,
+                                           install_statuses=install_statuses,
+                                           payroll_statuses=payroll_statuses)
 
             db.session.add(deal)
             db.session.flush()
 
             if status_id:
                 db.session.add(DealStatusHistory(
-                    deal_id=deal.id, status_id=status_id, changed_by=current_user.id
+                    deal_id=deal.id, status_id=status_id, changed_by=current_user.id,
+                    status_type="install"
+                ))
+            if payroll_status_id:
+                db.session.add(DealStatusHistory(
+                    deal_id=deal.id, status_id=payroll_status_id, changed_by=current_user.id,
+                    status_type="payroll"
                 ))
 
             db.session.commit()
@@ -452,7 +547,9 @@ def create_app():
             return redirect(url_for("deal_detail", deal_id=deal.id))
 
         return render_template("deal_form.html", deal=None,
-                               dealers=dealers, statuses=statuses)
+                               dealers=dealers, statuses=statuses,
+                               install_statuses=install_statuses,
+                               payroll_statuses=payroll_statuses)
 
     # ═════════════════════════════════════════════════════════════════════════
     #  DEALS – DETAIL
@@ -461,10 +558,12 @@ def create_app():
     @app.route("/deals/<int:deal_id>")
     @login_required
     def deal_detail(deal_id):
-        deal = Deal.query.get_or_404(deal_id)
-        statuses = Status.query.order_by(Status.order).all()
-        dealers  = Dealer.query.filter_by(is_active=True).order_by(Dealer.name).all()
-        history = deal.status_history
+        deal             = Deal.query.get_or_404(deal_id)
+        install_statuses = Status.query.filter_by(type='install').order_by(Status.order).all()
+        payroll_statuses = Status.query.filter_by(type='payroll').order_by(Status.order).all()
+        statuses         = install_statuses + payroll_statuses
+        dealers          = Dealer.query.filter_by(is_active=True).order_by(Dealer.name).all()
+        history          = deal.status_history
 
         history_enriched = []
         for i, entry in enumerate(history):
@@ -476,7 +575,10 @@ def create_app():
             })
 
         return render_template("deal_detail.html", deal=deal,
-                               statuses=statuses, dealers=dealers,
+                               statuses=statuses,
+                               install_statuses=install_statuses,
+                               payroll_statuses=payroll_statuses,
+                               dealers=dealers,
                                history=history_enriched)
 
     # ═════════════════════════════════════════════════════════════════════════
@@ -486,16 +588,19 @@ def create_app():
     @app.route("/deals/<int:deal_id>/edit", methods=["GET", "POST"])
     @login_required
     def deal_edit(deal_id):
-        deal = Deal.query.get_or_404(deal_id)
-        dealers = Dealer.query.filter_by(is_active=True).order_by(Dealer.name).all()
-        statuses = Status.query.order_by(Status.order).all()
+        deal             = Deal.query.get_or_404(deal_id)
+        dealers          = Dealer.query.filter_by(is_active=True).order_by(Dealer.name).all()
+        install_statuses = Status.query.filter_by(type='install').order_by(Status.order).all()
+        payroll_statuses = Status.query.filter_by(type='payroll').order_by(Status.order).all()
+        statuses         = install_statuses + payroll_statuses
 
         if request.method == "POST":
-            deal.name = request.form.get("name", "").strip()
+            deal.name         = request.form.get("name", "").strip()
             deal.installer_id = request.form.get("installer_id", type=int)
-            deal.use_redline = request.form.get("use_redline") == "1"
-            deal.notes = request.form.get("notes", "").strip()
-            new_status_id = request.form.get("status_id", type=int)
+            deal.use_redline  = request.form.get("use_redline") == "1"
+            deal.notes        = request.form.get("notes", "").strip()
+            new_status_id         = request.form.get("status_id", type=int)
+            new_payroll_status_id = request.form.get("payroll_status_id", type=int)
 
             if deal.use_redline:
                 try:
@@ -506,7 +611,9 @@ def create_app():
                 except ValueError:
                     flash("Invalid numeric values.", "error")
                     return render_template("deal_form.html", deal=deal,
-                                           dealers=dealers, statuses=statuses)
+                                           dealers=dealers, statuses=statuses,
+                                           install_statuses=install_statuses,
+                                           payroll_statuses=payroll_statuses)
                 deal.system_size, deal.company_redline = ss, cr
                 deal.adders, deal.contract_amount = ad, ca
                 deal.total_commission, deal.total_ppw, deal.net_ppw = _calc_redline(ss, cr, ad, ca)
@@ -517,14 +624,24 @@ def create_app():
                 except ValueError:
                     flash("Invalid amount.", "error")
                     return render_template("deal_form.html", deal=deal,
-                                           dealers=dealers, statuses=statuses)
+                                           dealers=dealers, statuses=statuses,
+                                           install_statuses=install_statuses,
+                                           payroll_statuses=payroll_statuses)
                 deal.system_size = deal.company_redline = deal.adders = None
                 deal.contract_amount = deal.total_commission = deal.total_ppw = deal.net_ppw = None
 
             if new_status_id and new_status_id != deal.current_status_id:
                 deal.current_status_id = new_status_id
                 db.session.add(DealStatusHistory(
-                    deal_id=deal.id, status_id=new_status_id, changed_by=current_user.id
+                    deal_id=deal.id, status_id=new_status_id, changed_by=current_user.id,
+                    status_type="install"
+                ))
+
+            if new_payroll_status_id and new_payroll_status_id != deal.payroll_status_id:
+                deal.payroll_status_id = new_payroll_status_id
+                db.session.add(DealStatusHistory(
+                    deal_id=deal.id, status_id=new_payroll_status_id, changed_by=current_user.id,
+                    status_type="payroll"
                 ))
 
             deal.updated_at = datetime.utcnow()
@@ -538,7 +655,9 @@ def create_app():
             return redirect(url_for("deal_detail", deal_id=deal.id))
 
         return render_template("deal_form.html", deal=deal,
-                               dealers=dealers, statuses=statuses)
+                               dealers=dealers, statuses=statuses,
+                               install_statuses=install_statuses,
+                               payroll_statuses=payroll_statuses)
 
     @app.route("/deals/<int:deal_id>/data")
     @login_required
@@ -546,17 +665,18 @@ def create_app():
         from flask import jsonify
         d = Deal.query.get_or_404(deal_id)
         return jsonify({
-            "id":               d.id,
-            "name":             d.name,
-            "installer_id":     d.installer_id,
-            "current_status_id":d.current_status_id,
-            "notes":            d.notes or "",
-            "use_redline":      d.use_redline,
-            "system_size":      d.system_size,
-            "company_redline":  d.company_redline,
-            "adders":           d.adders,
-            "contract_amount":  d.contract_amount,
-            "amount_owed":      d.amount_owed,
+            "id":                 d.id,
+            "name":               d.name,
+            "installer_id":       d.installer_id,
+            "current_status_id":  d.current_status_id,
+            "payroll_status_id":  d.payroll_status_id,
+            "notes":              d.notes or "",
+            "use_redline":        d.use_redline,
+            "system_size":        d.system_size,
+            "company_redline":    d.company_redline,
+            "adders":             d.adders,
+            "contract_amount":    d.contract_amount,
+            "amount_owed":        d.amount_owed,
         })
 
     # ═════════════════════════════════════════════════════════════════════════
@@ -566,28 +686,55 @@ def create_app():
     @app.route("/deals/<int:deal_id>/update_status", methods=["POST"])
     @login_required
     def deal_update_status(deal_id):
-        deal = Deal.query.get_or_404(deal_id)
+        deal          = Deal.query.get_or_404(deal_id)
+        status_type   = request.form.get("status_type", "install")  # 'install' or 'payroll'
         new_status_id = request.form.get("status_id", type=int)
-        note = request.form.get("note", "").strip() or None
+        note          = request.form.get("note", "").strip() or None
 
-        if new_status_id and new_status_id != deal.current_status_id:
-            deal.current_status_id = new_status_id
-            deal.updated_at = datetime.utcnow()
-            db.session.add(DealStatusHistory(
-                deal_id=deal.id, status_id=new_status_id,
-                changed_by=current_user.id, note=note
-            ))
-            db.session.commit()
-            flash("Status updated.", "success")
-        elif note and deal.current_status_id:
-            db.session.add(DealStatusHistory(
-                deal_id=deal.id, status_id=deal.current_status_id,
-                changed_by=current_user.id, note=note
-            ))
-            db.session.commit()
-            flash("Note added.", "success")
+        if status_type == "payroll":
+            current_id = deal.payroll_status_id
+            if new_status_id and new_status_id != current_id:
+                deal.payroll_status_id = new_status_id
+                deal.updated_at = datetime.utcnow()
+                db.session.add(DealStatusHistory(
+                    deal_id=deal.id, status_id=new_status_id,
+                    changed_by=current_user.id, note=note,
+                    status_type="payroll"
+                ))
+                db.session.commit()
+                flash("Payroll status updated.", "success")
+            elif note and current_id:
+                db.session.add(DealStatusHistory(
+                    deal_id=deal.id, status_id=current_id,
+                    changed_by=current_user.id, note=note,
+                    status_type="payroll"
+                ))
+                db.session.commit()
+                flash("Note added.", "success")
+            else:
+                flash("Select a different status or add a note.", "warning")
         else:
-            flash("Select a different status or add a note.", "warning")
+            current_id = deal.current_status_id
+            if new_status_id and new_status_id != current_id:
+                deal.current_status_id = new_status_id
+                deal.updated_at = datetime.utcnow()
+                db.session.add(DealStatusHistory(
+                    deal_id=deal.id, status_id=new_status_id,
+                    changed_by=current_user.id, note=note,
+                    status_type="install"
+                ))
+                db.session.commit()
+                flash("Install status updated.", "success")
+            elif note and current_id:
+                db.session.add(DealStatusHistory(
+                    deal_id=deal.id, status_id=current_id,
+                    changed_by=current_user.id, note=note,
+                    status_type="install"
+                ))
+                db.session.commit()
+                flash("Note added.", "success")
+            else:
+                flash("Select a different status or add a note.", "warning")
 
         return redirect(url_for("deal_detail", deal_id=deal_id))
 
@@ -644,28 +791,24 @@ def create_app():
         deal.amount_paid = round(sum(p.amount for p in deal.payments), 2)
         deal.updated_at = datetime.utcnow()
 
-        # Auto-adjust status after deletion
-        new_status = None
+        # Auto-adjust payroll status after deletion
+        new_payroll_status = None
         if deal.amount_paid <= 0:
-            # No payments left — revert to the last non-payment status in history
-            last_entry = (DealStatusHistory.query
-                .join(Status, DealStatusHistory.status_id == Status.id)
-                .filter(
-                    DealStatusHistory.deal_id == deal_id,
-                    ~Status.name.in_(["Partial paid", "Paid"])
-                )
-                .order_by(DealStatusHistory.changed_at.desc())
-                .first())
-            new_status = last_entry.status if last_entry else Status.query.filter_by(is_default=True).first()
-        elif deal.remaining_balance > 0.01 and deal.current_status and deal.current_status.name == "Paid":
+            # No payments left — revert payroll to Unpaid
+            new_payroll_status = Status.query.filter_by(name="Unpaid", type="payroll").first()
+            if not new_payroll_status:
+                # Fallback: first payroll status
+                new_payroll_status = Status.query.filter_by(type="payroll").order_by(Status.order).first()
+        elif deal.remaining_balance > 0.01 and deal.payroll_status and deal.payroll_status.name == "Paid":
             # Was fully paid but now has remaining balance — downgrade to Partial paid
-            new_status = Status.query.filter_by(name="Partial paid").first()
+            new_payroll_status = Status.query.filter_by(name="Partial paid", type="payroll").first()
 
-        if new_status and deal.current_status_id != new_status.id:
-            deal.current_status_id = new_status.id
+        if new_payroll_status and deal.payroll_status_id != new_payroll_status.id:
+            deal.payroll_status_id = new_payroll_status.id
             db.session.add(DealStatusHistory(
-                deal_id=deal.id, status_id=new_status.id,
+                deal_id=deal.id, status_id=new_payroll_status.id,
                 changed_by=current_user.id,
+                status_type="payroll",
                 note=f"Auto-adjusted: payment of ${deleted_amount:,.2f} deleted"
             ))
 
@@ -817,18 +960,21 @@ def create_app():
             action = request.form.get("action")
 
             if action == "create":
-                name = request.form.get("name", "").strip()
+                name  = request.form.get("name", "").strip()
                 order = request.form.get("order", 99, type=int)
                 color = request.form.get("color", "gray")
+                stype = request.form.get("type", "install")
+                if stype not in ("install", "payroll"):
+                    stype = "install"
                 if not name:
                     flash("Status name is required.", "error")
                 elif Status.query.filter_by(name=name).first():
                     flash("A status with that name already exists.", "error")
                 else:
-                    # Shift down all statuses at or after the target position
-                    for st in Status.query.filter(Status.order >= order).all():
+                    # Shift down statuses of the same type at or after the target position
+                    for st in Status.query.filter(Status.type == stype, Status.order >= order).all():
                         st.order += 1
-                    db.session.add(Status(name=name, order=order, color=color))
+                    db.session.add(Status(name=name, order=order, color=color, type=stype))
                     db.session.commit()
                     flash(f'Status "{name}" created.', "success")
 
@@ -843,7 +989,7 @@ def create_app():
                     else:
                         for st in Status.query.filter(Status.order > old_order, Status.order <= new_order, Status.id != s.id).all():
                             st.order -= 1
-                s.name = request.form.get("name", s.name).strip()
+                s.name  = request.form.get("name", s.name).strip()
                 s.order = new_order
                 s.color = request.form.get("color", s.color)
                 db.session.commit()
@@ -851,7 +997,9 @@ def create_app():
 
             elif action == "delete":
                 s = Status.query.get_or_404(request.form.get("status_id", type=int))
-                if s.deals:
+                has_install_deals = bool(s.deals)
+                has_payroll_deals = bool(s.payroll_deals)
+                if has_install_deals or has_payroll_deals:
                     flash("Cannot delete: deals are using this status.", "error")
                 else:
                     db.session.delete(s)
@@ -860,8 +1008,13 @@ def create_app():
 
             return redirect(url_for("admin_statuses"))
 
-        statuses = Status.query.order_by(Status.order).all()
-        return render_template("admin_statuses.html", statuses=statuses)
+        install_statuses = Status.query.filter_by(type='install').order_by(Status.order).all()
+        payroll_statuses = Status.query.filter_by(type='payroll').order_by(Status.order).all()
+        statuses = install_statuses + payroll_statuses
+        return render_template("admin_statuses.html",
+                               statuses=statuses,
+                               install_statuses=install_statuses,
+                               payroll_statuses=payroll_statuses)
 
     @app.route("/admin/statuses/reorder", methods=["POST"])
     @login_required

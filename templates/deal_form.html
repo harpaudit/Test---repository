@@ -94,12 +94,28 @@
           {% endif %}
         </div>
 
-        <div class="mw-field" style="margin-bottom:0;">
-          <label for="status_id" class="mw-form-lbl">Initial status</label>
+        <div class="mw-field">
+          <label for="status_id" class="mw-form-lbl">
+            <i class="fa-solid fa-wrench" style="font-size:11px;color:#4f7a9a;margin-right:4px;"></i>Install status
+          </label>
           <select id="status_id" name="status_id" class="mw-input">
-            {% for s in statuses %}
+            {% for s in install_statuses %}
             <option value="{{ s.id }}"
               {% if deal and deal.current_status_id == s.id %}selected
+              {% elif not deal and loop.first %}selected{% endif %}>
+              {{ s.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mw-field" style="margin-bottom:0;">
+          <label for="payroll_status_id" class="mw-form-lbl">
+            <i class="fa-solid fa-dollar-sign" style="font-size:11px;color:#3f6651;margin-right:4px;"></i>Payroll status
+          </label>
+          <select id="payroll_status_id" name="payroll_status_id" class="mw-input">
+            {% for s in payroll_statuses %}
+            <option value="{{ s.id }}"
+              {% if deal and deal.payroll_status_id == s.id %}selected
               {% elif not deal and loop.first %}selected{% endif %}>
               {{ s.name }}
             </option>

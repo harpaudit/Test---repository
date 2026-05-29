@@ -117,7 +117,7 @@
     <div class="dash-sub">Here's how the pipeline is moving — {{ current_dt.strftime('%B %d, %Y') }}.</div>
   </div>
   <div style="display:flex;gap:8px;">
-    <a href="{{ url_for('export_excel', installer_id=installer_filter, status_id=status_filter) }}" class="mw-btn sm">
+    <a href="{{ url_for('export_excel', installer_id=installer_filter, status_id=install_filter) }}" class="mw-btn sm">
       <i class="fa-solid fa-file-excel" style="color:#16a34a;"></i>Export Excel
     </a>
   </div>
@@ -173,8 +173,9 @@
         <a href="{{ url_for('dealers_list') }}" class="mw-btn sm ghost">View all →</a>
       </div>
       {% if dealer_kpis %}
-      {% set max_total = dealer_kpis[0].total if dealer_kpis else 1 %}
       {% for ki in dealer_kpis[:6] %}
+      {% set dealer_total = ki.collected + ki.total %}
+      {% set pct = [(ki.collected / dealer_total * 100) if dealer_total > 0 else 0, 100] | min | round %}
       <div class="dash-leader-row">
         <span class="dash-leader-rank">{{ loop.index }}</span>
         <div>
@@ -185,8 +186,8 @@
           <div class="dash-leader-sub">{{ ki.count }} deal{{ 's' if ki.count != 1 }}</div>
         </div>
         <div class="dash-leader-num">{{ ki.total | currency }}</div>
-        <div class="dash-leader-bar">
-          <div style="width:{{ [(ki.total / max_total * 100) if max_total > 0 else 0, 100] | min | round }}%;"></div>
+        <div class="dash-leader-bar" title="{{ pct }}% collected">
+          <div style="width:{{ pct }}%;"></div>
         </div>
         <div class="dash-leader-num" style="color:var(--accent);">{{ ki.collected | currency }}</div>
       </div>
@@ -197,13 +198,17 @@
     </div>
 
     <!-- Pipeline by status -->
-    {% if status_kpis %}
+    {% if install_kpis or payroll_kpis %}
     <div class="dash-panel">
       <div class="dash-panel-head">
         <div class="dash-panel-title">Pipeline by status</div>
       </div>
-      {% for sk in status_kpis %}
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border-soft);">
+      {% if install_kpis %}
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;padding:6px 0 4px;display:flex;align-items:center;gap:5px;">
+        <i class="fa-solid fa-wrench" style="color:#4f7a9a;"></i>Install
+      </div>
+      {% for sk in install_kpis %}
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border-soft);">
         <div style="display:flex;align-items:center;gap:10px;">
           <span class="mw-chip {{ sk.color | mw_chip }}" style="padding:3px 10px;">
             <span class="dot" style="background:{{ sk.color | mw_dot }};"></span>
@@ -212,11 +217,32 @@
         </div>
         <div style="display:flex;align-items:center;gap:16px;">
           <span style="font-size:12px;color:var(--muted);">{{ sk.count }} deal{{ 's' if sk.count != 1 }}</span>
-          <a href="{{ url_for('dashboard', status_id=sk.id) }}" data-page-link
+          <a href="{{ url_for('dashboard', install_id=sk.id) }}" data-page-link
              style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:500;">Filter →</a>
         </div>
       </div>
       {% endfor %}
+      {% endif %}
+      {% if payroll_kpis %}
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;padding:10px 0 4px;display:flex;align-items:center;gap:5px;border-top:1px solid var(--border-soft);margin-top:4px;">
+        <i class="fa-solid fa-dollar-sign" style="color:#3f6651;"></i>Payroll
+      </div>
+      {% for sk in payroll_kpis %}
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border-soft);">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="mw-chip {{ sk.color | mw_chip }}" style="padding:3px 10px;">
+            <span class="dot" style="background:{{ sk.color | mw_dot }};"></span>
+            {{ sk.name }}
+          </span>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <span style="font-size:12px;color:var(--muted);">{{ sk.count }} deal{{ 's' if sk.count != 1 }}</span>
+          <a href="{{ url_for('dashboard', payroll_id=sk.id) }}" data-page-link
+             style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:500;">Filter →</a>
+        </div>
+      </div>
+      {% endfor %}
+      {% endif %}
     </div>
     {% endif %}
 
@@ -234,10 +260,10 @@
           <option value="{{ inst.id }}" {{ 'selected' if installer_filter == inst.id | string }}>{{ inst.name }}</option>
           {% endfor %}
         </select>
-        <select name="status_id" onchange="this.form.submit()" class="dash-select">
-          <option value="">All statuses</option>
-          {% for s in statuses %}
-          <option value="{{ s.id }}" {{ 'selected' if status_filter == s.id | string }}>{{ s.name }}</option>
+        <select name="payroll_id" onchange="this.form.submit()" class="dash-select" title="Filter by payroll status">
+          <option value="">Payroll: All</option>
+          {% for s in payroll_statuses %}
+          <option value="{{ s.id }}" {{ 'selected' if payroll_filter == s.id | string }}>{{ s.name }}</option>
           {% endfor %}
         </select>
         <select name="per_page" onchange="this.form.submit()" class="dash-select">
@@ -245,7 +271,7 @@
           <option value="20"  {{ 'selected' if per_page == 20  else '' }}>20 / page</option>
           <option value="50"  {{ 'selected' if per_page == 50  else '' }}>50 / page</option>
         </select>
-        {% if installer_filter or status_filter or sort != 'created' or direction != 'desc' %}
+        {% if installer_filter or install_filter or payroll_filter or sort != 'created' or direction != 'desc' %}
         <a href="{{ url_for('dashboard', per_page=per_page) }}" class="mw-btn sm danger" data-page-link>
           <i class="fa-solid fa-xmark"></i>Clear
         </a>
@@ -286,7 +312,7 @@
     .sort-arrow { font-size:10px; margin-left:4px; opacity:.4; }
     .sort-th.active .sort-arrow { opacity:1; color:var(--accent); }
   </style>
-  {% macro sort_url(col) %}{{ url_for('dashboard', installer_id=installer_filter, status_id=status_filter, per_page=per_page, page=1, sort=col, dir=('asc' if (sort == col and direction == 'desc') else 'desc')) }}{% endmacro %}
+  {% macro sort_url(col) %}{{ url_for('dashboard', installer_id=installer_filter, install_id=install_filter, payroll_id=payroll_filter, per_page=per_page, page=1, sort=col, dir=('asc' if (sort == col and direction == 'desc') else 'desc')) }}{% endmacro %}
   {% macro sort_icon(col) %}<span class="sort-arrow">{% if sort == col %}{{ '↑' if direction == 'asc' else '↓' }}{% else %}↕{% endif %}</span>{% endmacro %}
   <table class="mw-table">
     <thead>
@@ -320,10 +346,10 @@
         </td>
         <td style="color:var(--muted);">{{ deal.dealer.name if deal.dealer else '—' }}</td>
         <td>
-          {% if deal.current_status %}
-          <span class="mw-chip {{ deal.current_status.color | mw_chip }}">
-            <span class="dot" style="background:{{ deal.current_status.color | mw_dot }};"></span>
-            {{ deal.current_status.name }}
+          {% if deal.payroll_status %}
+          <span class="mw-chip {{ deal.payroll_status.color | mw_chip }}">
+            <span class="dot" style="background:{{ deal.payroll_status.color | mw_dot }};"></span>
+            {{ deal.payroll_status.name }}
           </span>
           {% else %}<span style="color:var(--muted-2);font-size:12px;">—</span>{% endif %}
         </td>
@@ -371,21 +397,21 @@
     <!-- Center: page buttons -->
     {% if pagination.pages > 1 %}
     <div style="display:flex;align-items:center;gap:4px;">
-      <a href="{{ url_for('dashboard', installer_id=installer_filter, status_id=status_filter, per_page=per_page, sort=sort, dir=direction, page=pagination.prev_num) }}"
+      <a href="{{ url_for('dashboard', installer_id=installer_filter, install_id=install_filter, payroll_id=payroll_filter, per_page=per_page, sort=sort, dir=direction, page=pagination.prev_num) }}"
          class="mw-btn sm ghost" data-page-link
          style="{{ 'opacity:.35;pointer-events:none;' if not pagination.has_prev }}">
         <i class="fa-solid fa-chevron-left"></i>
       </a>
       {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
         {% if p %}
-          <a href="{{ url_for('dashboard', installer_id=installer_filter, status_id=status_filter, per_page=per_page, sort=sort, dir=direction, page=p) }}"
+          <a href="{{ url_for('dashboard', installer_id=installer_filter, install_id=install_filter, payroll_id=payroll_filter, per_page=per_page, sort=sort, dir=direction, page=p) }}"
              class="mw-btn sm {{ 'primary' if p == pagination.page else 'ghost' }}"
              style="min-width:32px;justify-content:center;" data-page-link>{{ p }}</a>
         {% else %}
           <span style="font-size:12px;color:var(--muted-2);padding:0 4px;">…</span>
         {% endif %}
       {% endfor %}
-      <a href="{{ url_for('dashboard', installer_id=installer_filter, status_id=status_filter, per_page=per_page, sort=sort, dir=direction, page=pagination.next_num) }}"
+      <a href="{{ url_for('dashboard', installer_id=installer_filter, install_id=install_filter, payroll_id=payroll_filter, per_page=per_page, sort=sort, dir=direction, page=pagination.next_num) }}"
          class="mw-btn sm ghost" data-page-link
          style="{{ 'opacity:.35;pointer-events:none;' if not pagination.has_next }}">
         <i class="fa-solid fa-chevron-right"></i>
@@ -394,7 +420,7 @@
     {% endif %}
 
     <!-- Right: export -->
-    <a href="{{ url_for('export_excel', installer_id=installer_filter, status_id=status_filter) }}"
+    <a href="{{ url_for('export_excel', installer_id=installer_filter, status_id=install_filter) }}"
        style="font-size:12px;color:var(--accent);text-decoration:none;font-weight:500;display:inline-flex;align-items:center;gap:5px;">
       <i class="fa-solid fa-download"></i>Export current view
     </a>
@@ -404,10 +430,10 @@
     <i class="fa-solid fa-inbox"></i>
     <div class="title">No deals to show</div>
     <div class="sub">
-      {% if installer_filter or status_filter %}Try adjusting the filters.
+      {% if installer_filter or install_filter or payroll_filter %}Try adjusting the filters.
       {% else %}Create your first deal to get started.{% endif %}
     </div>
-    {% if not installer_filter and not status_filter %}
+    {% if not installer_filter and not install_filter and not payroll_filter %}
     <a href="{{ url_for('deal_new') }}" class="mw-btn primary" style="margin-top:16px;">
       <i class="fa-solid fa-plus"></i>New Deal
     </a>
@@ -447,9 +473,17 @@
           </select>
         </div>
         <div class="mw-field">
-          <label class="mw-form-lbl">Status</label>
+          <label class="mw-form-lbl"><i class="fa-solid fa-wrench" style="font-size:10px;color:#4f7a9a;margin-right:3px;"></i>Install status</label>
           <select name="status_id" id="ed-status" class="mw-input">
-            {% for s in statuses %}
+            {% for s in install_statuses %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mw-field">
+          <label class="mw-form-lbl"><i class="fa-solid fa-dollar-sign" style="font-size:10px;color:#3f6651;margin-right:3px;"></i>Payroll status</label>
+          <select name="payroll_status_id" id="ed-payroll-status" class="mw-input">
+            {% for s in payroll_statuses %}
             <option value="{{ s.id }}">{{ s.name }}</option>
             {% endfor %}
           </select>
@@ -549,9 +583,17 @@
           </select>
         </div>
         <div class="mw-field">
-          <label class="mw-form-lbl">Initial status</label>
+          <label class="mw-form-lbl"><i class="fa-solid fa-wrench" style="font-size:10px;color:#4f7a9a;margin-right:3px;"></i>Install status</label>
           <select name="status_id" id="nd-status" class="mw-input">
-            {% for s in statuses %}
+            {% for s in install_statuses %}
+            <option value="{{ s.id }}" {% if loop.first %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mw-field">
+          <label class="mw-form-lbl"><i class="fa-solid fa-dollar-sign" style="font-size:10px;color:#3f6651;margin-right:3px;"></i>Payroll status</label>
+          <select name="payroll_status_id" id="nd-payroll-status" class="mw-input">
+            {% for s in payroll_statuses %}
             <option value="{{ s.id }}" {% if loop.first %}selected{% endif %}>{{ s.name }}</option>
             {% endfor %}
           </select>
@@ -688,6 +730,9 @@
 
         const status = document.getElementById('ed-status');
         if (status) [...status.options].forEach(o => o.selected = (parseInt(o.value) === d.current_status_id));
+
+        const payrollStatus = document.getElementById('ed-payroll-status');
+        if (payrollStatus) [...payrollStatus.options].forEach(o => o.selected = (parseInt(o.value) === d.payroll_status_id));
 
         if (d.use_redline) {
           const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
