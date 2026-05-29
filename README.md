@@ -100,12 +100,17 @@ Cuatro tarjetas con los indicadores clave:
 - **Columna derecha:** Tabla completa de todos los deals
 
 #### Tabla de deals
-- Columnas: #, Deal, Dealer, Status, Original, Paid, Remaining, Created
+- Columnas: #, Deal, Dealer, Status (payroll), Original, Paid, Remaining, Created
 - **Ordenamiento** por columnas Original, Remaining y Created — clic en el encabezado alterna entre ascendente ↑ y descendente ↓
-- **Filtros** por dealer y por status; selector de paginación (10 / 20 / 50 por página)
+- **Filtros** por dealer y por payroll status; selector de paginación (10 / 20 / 50 por página)
 - **Botón Clear** aparece cuando hay cualquier filtro u ordenamiento activo
 - **Paginación AJAX** — cambiar de página no recarga ni desplaza la pantalla
 - **Menú kebab (⋮)** por fila con opciones: Ver, Editar, Eliminar
+
+#### Top dealers
+- Ranking de dealers ordenado por pipeline pendiente
+- La barra de progreso muestra el **porcentaje cobrado** de cada dealer (verde = cobrado, gris = pendiente)
+- La columna derecha muestra el monto total cobrado en verde
 
 ---
 
@@ -114,7 +119,8 @@ Cuatro tarjetas con los indicadores clave:
 #### Crear deal (modal)
 El botón **+ New deal** en la barra de navegación abre un modal sobre el dashboard sin perder el contexto. El formulario incluye:
 - Nombre del deal y dealer (obligatorios)
-- Stage inicial
+- **Install status** — etapa de instalación (NTP, On going…)
+- **Payroll status** — estado de pago (Unpaid, Partial paid, Paid…)
 - Modo de cálculo: **Redline** o **Fixed amount**
 - Notas opcionales
 
@@ -127,9 +133,10 @@ El botón **Edit deal** en la vista de detalle, y la opción **Edit** del menú 
 Accesible desde cualquier fila de la tabla. Muestra:
 - Resumen de pagos: monto cobrado, pendiente, porcentaje de avance
 - Información financiera (modo Redline o Fixed amount)
+- Ambos badges de status: Install y Payroll
 - Panel de registro de pagos con nota opcional
-- Panel de cambio de status con nota
-- Historial completo de cambios de status con timestamps y duración en cada etapa
+- Paneles independientes para actualizar Install status y Payroll status
+- Historial completo de cambios de status con tipo (Install/Payroll), timestamps y duración en cada etapa
 
 #### Eliminación
 Disponible desde el menú kebab. Solicita confirmación antes de proceder.
@@ -167,14 +174,19 @@ Para cuando el dealer no provee datos granulares. Se ingresa únicamente el **Mo
 
 ### Stages del pipeline (Status Management)
 
-Accesible desde el menú **Statuses** (solo administradores). Permite gestionar completamente los stages del pipeline:
+Accesible desde el menú **Statuses** (solo administradores). Los stages están divididos en dos tipos independientes:
 
+#### Install stages
+Representan la etapa de instalación del contrato. Predeterminados: **NTP**, **On going**.
+
+#### Payroll stages
+Representan el estado de cobro. Predeterminados: **Unpaid**, **Partial paid**, **Paid**.
+
+Cada sección permite:
 - **Crear** un nuevo stage con nombre, orden y color de badge
-  - Al asignar una posición, los stages existentes se reordenan automáticamente
-- **Editar** nombre, orden y color de cualquier stage
-  - Cambiar el orden reordena los demás stages automáticamente
-- **Eliminar** cualquier stage que no tenga deals asociados
-  - Los stages con deals muestran un candado; no se pueden eliminar hasta reasignar sus deals
+  - Al asignar una posición, los stages del mismo tipo se reordenan automáticamente
+- **Editar** nombre, orden y color
+- **Eliminar** cualquier stage sin deals asociados (los que tienen deals muestran un candado)
 - **Reordenar** arrastrando las filas con el handle (⣿) — drag & drop en tiempo real con SortableJS
 
 Los colores disponibles son: Blue, Red, Yellow, Green, Gray, Purple, Orange.
