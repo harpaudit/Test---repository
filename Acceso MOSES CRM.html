@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="3;url=http://192.168.1.2:5001">
+  <meta http-equiv="refresh" content="3;url=http://192.168.1.15:5001">
   <title>MOSES CRM — Acceso</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -72,8 +72,8 @@
     <div class="logo">M</div>
     <h1>MOSES CRM</h1>
     <p class="sub">Solar Pipeline — acceso en red local</p>
-    <div class="url-box">http://192.168.1.2:5001</div>
-    <a href="http://192.168.1.2:5001" class="btn">Abrir MOSES CRM →</a>
+    <div class="url-box">http://192.168.1.15:5001</div>
+    <a href="http://192.168.1.15:5001" class="btn">Abrir MOSES CRM →</a>
     <p class="countdown">
       <span class="dot"></span>
       Redirigiendo automáticamente en 3 segundos...
@@ -85,7 +85,7 @@
     const t = setInterval(() => {
       s--;
       p.innerHTML = '<span class="dot"></span> Redirigiendo en ' + s + ' segundo' + (s !== 1 ? 's' : '') + '...';
-      if (s <= 0) { clearInterval(t); window.location.href = 'http://192.168.1.2:5001'; }
+      if (s <= 0) { clearInterval(t); window.location.href = 'http://192.168.1.15:5001'; }
     }, 1000);
   </script>
 </body>
